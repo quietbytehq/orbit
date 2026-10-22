@@ -13,6 +13,8 @@ Platforms: Linux (AppImage, .deb) and Windows (.msi). macOS is out of scope for 
 
 ## 2. Architecture
 
+The frontend is SvelteKit running in SPA mode (adapter-static), which is Tauri's recommended setup.
+
 ```
 ┌──────────────────────────── Orbit (Tauri 2 process) ────────────────────────────┐
 │  Svelte + TypeScript UI (splash window, main window)                            │
@@ -47,6 +49,9 @@ Platforms: Linux (AppImage, .deb) and Windows (.msi). macOS is out of scope for 
 - Crash handling: if the process exits unexpectedly, Orbit restarts it with exponential backoff
   (1 s, 2 s, 4 s, max 3 attempts), then reports the disconnected state.
 - On app exit Orbit stops `rcd` (`core/quit`, then kill after 3 s).
+- If Orbit is force-killed, rcd must not outlive it. On Linux the child is started with
+  `PR_SET_PDEATHSIG`, so the kernel signals rcd when Orbit dies. Windows uses a job object with
+  kill-on-close (section 6).
 - The token and port live in memory only. They are regenerated on every start.
 
 ### 2.2 Credentials
@@ -57,13 +62,15 @@ Platforms: Linux (AppImage, .deb) and Windows (.msi). macOS is out of scope for 
 
 ### 2.3 Data locations
 
-| Item        | Linux                                 | Windows                      |
-|-------------|---------------------------------------|------------------------------|
-| App data    | `$XDG_DATA_HOME/orbit` (`~/.local/share/orbit`) | `%APPDATA%\orbit`  |
-| rclone.conf | `<app data>/rclone.conf`              | `<app data>\rclone.conf`     |
-| settings    | `<app data>/settings.json`            | `<app data>\settings.json`   |
-| jobs        | `<app data>/jobs.json`                | `<app data>\jobs.json`       |
-| logs        | `<app data>/logs/`                    | `<app data>\logs\`           |
+The app data directory is what Tauri's `app_data_dir()` returns for identifier `com.orbit.rclone`.
+
+| Item        | Linux                                          | Windows                              |
+|-------------|------------------------------------------------|--------------------------------------|
+| App data    | `~/.local/share/com.orbit.rclone`              | `%APPDATA%\com.orbit.rclone`         |
+| rclone.conf | `<app data>/rclone.conf`                       | `<app data>\rclone.conf`             |
+| settings    | `<app data>/settings.json`                     | `<app data>\settings.json`           |
+| jobs        | `<app data>/jobs.json`                         | `<app data>\jobs.json`               |
+| logs        | `<app data>/logs/`                             | `<app data>\logs\`                   |
 
 ## 3. Design
 
@@ -213,6 +220,8 @@ Each milestone is committed to local git with a message describing it. Nothing i
 ## 6. Windows specifics
 
 - rclone and Orbit spawn child processes with `CREATE_NO_WINDOW` so no console flashes.
+- rcd is assigned to a job object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so it ends when Orbit
+  does, including after a crash. This is the Windows counterpart of `PR_SET_PDEATHSIG` on Linux.
 - WinFsp detection (Rust, `cfg(windows)`): check the registry key
   `HKLM\SOFTWARE\WOW6432Node\WinFsp` (`InstallDir`) and the presence of `winfsp-x64.dll` in
   `System32`. If missing, the mount page shows a prompt with the WinFsp download link and a

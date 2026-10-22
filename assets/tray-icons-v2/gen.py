@@ -1,4 +1,4 @@
-import math, io, os, shutil, cairosvg, numpy as np
+import math, io, os, shutil, struct, cairosvg, numpy as np
 from PIL import Image
 W=256
 CLOUD='<circle cx="70" cy="146" r="30"/><circle cx="116" cy="112" r="44"/><circle cx="168" cy="124" r="36"/><circle cx="194" cy="148" r="28"/><rect x="70" y="130" width="124" height="46"/>'
@@ -51,11 +51,12 @@ def png(k,variant):
         out[...,:3]=(B[...,:3]*ba+out[...,:3]*oa*(1-ba))/np.maximum(na,1e-6);out[...,3:4]=na
     return Image.fromarray((out*255).round().astype(np.uint8),'RGBA').resize((W,W),Image.LANCZOS)
 names=['base','synced','syncing','disconnected']
-for d in ['256','64','32','16','16x8']: os.makedirs(d,exist_ok=True)
+SIZES=(64,48,32,24,22,20)  # downscaled from the 256 master
+for d in ['256',*map(str,SIZES),'16','16x8','ico']: os.makedirs(d,exist_ok=True)
 for v in ['white','dark']:
     for k in names:
         n=f'{v}-{k}'; open(f'256/{n}.svg','w').write(svg(k,v)); im=png(k,v); im.save(f'256/{n}.png')
-        for s in (64,32): im.resize((s,s),Image.LANCZOS).save(f'{s}/{n}.png')
+        for s in SIZES: im.resize((s,s),Image.LANCZOS).save(f'{s}/{n}.png')
 # 16px hand pixel art
 G=["................","................","................","................",
    "......####......",".....######.....","..##.######.##..",".##############.",
@@ -93,4 +94,23 @@ for root,_,fs in os.walk('.'):
     for f in fs:
         if f.endswith('.png') and f!='preview.png':
             im=Image.open(os.path.join(root,f));assert im.mode=='RGBA' and im.getpixel((0,0))[3]==0
+# Multi-size .ico for Windows, one file per variant and state.
+# 16 px uses the hand-made pixel art; every other size is downscaled from the 256 master.
+ICO_SIZES=(16,20,24,32,48,64,256)
+def ico_frames(k,v):
+    src={16:f'16/{v}-{k}.png',256:f'256/{v}-{k}.png'}
+    return {s:Image.open(src.get(s,f'{s}/{v}-{k}.png')).convert('RGBA') for s in ICO_SIZES}
+def write_ico(path,frames):
+    blobs=[]
+    for s,im in frames.items():
+        b=io.BytesIO(); im.save(b,'PNG'); blobs.append((s,b.getvalue()))
+    out=bytearray(struct.pack('<HHH',0,1,len(blobs)))
+    offset=6+16*len(blobs)
+    for s,data in blobs:
+        w=0 if s==256 else s  # ICO stores 256 as 0
+        out+=struct.pack('<BBBBHHII',w,w,0,0,1,32,len(data),offset); offset+=len(data)
+    for _,data in blobs: out+=data
+    open(path,'wb').write(bytes(out))
+for v in ['white','dark']:
+    for k in names: write_ico(f'ico/{v}-{k}.ico', ico_frames(k,v))
 print('ok')
