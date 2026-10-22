@@ -8,6 +8,7 @@ use crate::settings::Settings;
 
 
 pub use process::RcdSpec;
+pub use client::RcClient;
 pub use supervisor::{RcdState, Supervisor};
 
 /// Builds the spec for `rclone rcd` from the app paths and current settings.

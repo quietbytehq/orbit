@@ -1,0 +1,73 @@
+<script lang="ts">
+  import { onMount } from "svelte";
+  import { api, errorMessage } from "$lib/api";
+  import type { ProviderDef } from "$lib/api/types";
+
+  let providers = $state<ProviderDef[]>([]);
+  let error = $state<string | null>(null);
+
+  onMount(async () => {
+    try {
+      providers = await api.listProviders();
+    } catch (err) {
+      error = errorMessage(err);
+    }
+  });
+
+  const authLabel = { browser: "Browser sign-in", credentials: "Keys or password" } as const;
+</script>
+
+<h1>Add a remote</h1>
+<p class="help">Choose the service you want to connect. You can add more later.</p>
+
+{#if error}<p class="error" role="alert">{error}</p>{/if}
+
+<div class="grid">
+  {#each providers as provider (provider.id)}
+    <a class="card provider" href={`/remotes/new/${provider.id}`}>
+      <span class="title">{provider.title}</span>
+      <span class="tagline">{provider.tagline}</span>
+      <span class="auth">{authLabel[provider.auth]}</span>
+    </a>
+  {/each}
+</div>
+
+<style>
+  .help {
+    color: var(--text-secondary);
+    margin: -12px 0 20px;
+  }
+  .error {
+    color: var(--status-disconnected);
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 12px;
+  }
+  .provider {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.12s ease;
+  }
+  .provider:hover {
+    transform: translateY(-1px);
+  }
+  .title {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .tagline {
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+  .auth {
+    margin-top: auto;
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+</style>

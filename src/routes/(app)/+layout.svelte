@@ -9,8 +9,15 @@
     void rcd.start();
   });
 
-  // Each entry is added in the milestone that builds its screen.
-  const sections = [{ href: "/", label: "Overview" }];
+  function isCurrent(href: string): boolean {
+    const path = page.url.pathname;
+    return href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
+  }
+
+  const sections = [
+    { href: "/", label: "Overview" },
+    { href: "/remotes", label: "Remotes" },
+  ];
 </script>
 
 <div class="shell">
@@ -21,7 +28,7 @@
     </div>
     <nav>
       {#each sections as section (section.href)}
-        <a href={section.href} class="item" aria-current={page.url.pathname === section.href ? "page" : undefined}>
+        <a href={section.href} class="item" aria-current={isCurrent(section.href) ? "page" : undefined}>
           {section.label}
         </a>
       {/each}

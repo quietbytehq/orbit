@@ -1,20 +1,45 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { AppError, RcdState } from "./types";
+import type {
+  AppError,
+  ConnectionTest,
+  NewRemote,
+  ProviderDef,
+  RcdState,
+  RemoteForm,
+  RemoteSummary,
+} from "./types";
 
 export type * from "./types";
 
 export const RCD_STATE_EVENT = "rcd://state";
+export const SIGN_IN_URL_EVENT = "wizard://sign-in-url";
 
-/** Typed wrappers around Tauri commands. Each one returns a promise that rejects with an AppError. */
+/** Typed wrappers around Tauri commands. Each one rejects with an AppError on failure. */
 export const api = {
   getRcdState: () => invoke<RcdState>("get_rcd_state"),
   restartRcd: () => invoke<void>("restart_rcd"),
   splashFinished: () => invoke<void>("splash_finished"),
+
+  listProviders: () => invoke<ProviderDef[]>("list_providers"),
+  listRemotes: () => invoke<RemoteSummary[]>("list_remotes"),
+  getRemoteForm: (name: string) => invoke<RemoteForm>("get_remote_form", { name }),
+  createRemote: (request: NewRemote) => invoke<RemoteSummary>("create_remote", { request }),
+  startBrowserSignIn: (request: NewRemote) => invoke<RemoteSummary>("start_browser_sign_in", { request }),
+  cancelBrowserSignIn: () => invoke<void>("cancel_browser_sign_in"),
+  updateRemote: (name: string, values: Record<string, string>) =>
+    invoke<void>("update_remote", { name, update: { values } }),
+  renameRemote: (name: string, newName: string) => invoke<string>("rename_remote", { name, newName }),
+  deleteRemote: (name: string) => invoke<void>("delete_remote", { name }),
+  testRemote: (name: string) => invoke<ConnectionTest>("test_remote", { name }),
 };
 
 export function onRcdState(handler: (state: RcdState) => void): Promise<UnlistenFn> {
   return listen<RcdState>(RCD_STATE_EVENT, (event) => handler(event.payload));
+}
+
+export function onSignInUrl(handler: (url: string) => void): Promise<UnlistenFn> {
+  return listen<string>(SIGN_IN_URL_EVENT, (event) => handler(event.payload));
 }
 
 export function isAppError(value: unknown): value is AppError {

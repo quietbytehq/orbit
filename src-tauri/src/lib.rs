@@ -2,12 +2,14 @@ mod commands;
 pub mod error;
 pub mod paths;
 mod reveal;
+pub mod remotes;
 pub mod rclone;
 pub mod settings;
 pub mod status;
 mod tray;
 
 use paths::AppPaths;
+use remotes::health::HealthStore;
 use reveal::{RevealGate, RevealState};
 use rclone::{RcdState, Supervisor};
 use std::sync::Mutex;
@@ -53,6 +55,7 @@ pub fn run() {
             let spec = rclone::spec_for(&paths, &settings);
 
             app.manage(RevealState(Mutex::new(RevealGate::new(settings.splash_enabled))));
+            app.manage(HealthStore::default());
             app.manage(TrayHandle::empty());
             let handle = app.handle().clone();
             let supervisor = Supervisor::start(spec, move |state| on_rcd_change(&handle, state));
@@ -85,6 +88,16 @@ pub fn run() {
             commands::get_rcd_state,
             commands::restart_rcd,
             commands::splash_finished,
+            remotes::commands::list_providers,
+            remotes::commands::list_remotes,
+            remotes::commands::get_remote_form,
+            remotes::commands::create_remote,
+            remotes::commands::start_browser_sign_in,
+            remotes::commands::cancel_browser_sign_in,
+            remotes::commands::update_remote,
+            remotes::commands::rename_remote,
+            remotes::commands::delete_remote,
+            remotes::commands::test_remote,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Orbit");
