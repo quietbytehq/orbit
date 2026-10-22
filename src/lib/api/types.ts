@@ -162,6 +162,15 @@ export type RunOutcome =
   | { state: "failed"; message: string }
   | { state: "cancelled" };
 
+/**
+ * Mirrors `jobs::Schedule`. Schedules fire only while Orbit is running. `every` counts minutes
+ * from the newest run; `daily` is a local time of day.
+ */
+export type Schedule =
+  | { kind: "manual" }
+  | { kind: "every"; minutes: number }
+  | { kind: "daily"; hour: number; minute: number };
+
 /** Mirrors `jobs::RunRecord`. */
 export interface RunRecord {
   id: string;
@@ -172,6 +181,8 @@ export interface RunRecord {
   bytes: number;
   errors: number;
   logFile: string;
+  /** True when the schedule started the run rather than the user. */
+  scheduled: boolean;
 }
 
 /** Mirrors `jobs::Job`. */
@@ -182,6 +193,7 @@ export interface Job {
   source: Endpoint;
   destination: Endpoint;
   enabled: boolean;
+  schedule: Schedule;
   runs: RunRecord[];
 }
 
@@ -200,6 +212,8 @@ export interface JobProgress {
 /** Mirrors `jobs::JobView`. */
 export interface JobView extends Job {
   progress: JobProgress | null;
+  /** Unix seconds of the next automatic run. Null for manual or disabled jobs. */
+  nextRunAt: number | null;
 }
 
 /** Mirrors `jobs::JobInput`. */
@@ -208,6 +222,7 @@ export interface JobInput {
   kind: JobKind;
   source: Endpoint;
   destination: Endpoint;
+  schedule: Schedule;
 }
 
 /** Mirrors `mounts::MountInfo`. */

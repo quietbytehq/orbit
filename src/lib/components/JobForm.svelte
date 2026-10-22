@@ -2,7 +2,8 @@
   import Dialog from "./Dialog.svelte";
   import EndpointField from "./EndpointField.svelte";
   import { api, errorMessage } from "$lib/api";
-  import type { Endpoint, JobInput, JobKind, JobView } from "$lib/api/types";
+  import type { Endpoint, JobInput, JobKind, JobView, Schedule } from "$lib/api/types";
+  import { intervalMinutes, intervalParts, parseTime, timeValue, type IntervalUnit } from "$lib/util/schedule";
 
   let {
     existing = null,
@@ -23,8 +24,39 @@
   let source = $state<Endpoint | null>(existing?.source ?? null);
   // svelte-ignore state_referenced_locally
   let destination = $state<Endpoint | null>(existing?.destination ?? null);
+  // svelte-ignore state_referenced_locally
+  const initialSchedule: Schedule = existing?.schedule ?? { kind: "manual" };
+  const initialInterval = intervalParts(initialSchedule.kind === "every" ? initialSchedule.minutes : 60);
+  let scheduleKind = $state<Schedule["kind"]>(initialSchedule.kind);
+  let intervalValue = $state(initialInterval.value);
+  let intervalUnit = $state<IntervalUnit>(initialInterval.unit);
+  let dailyTime = $state(
+    initialSchedule.kind === "daily" ? timeValue(initialSchedule.hour, initialSchedule.minute) : "09:00",
+  );
   let busy = $state(false);
   let error = $state<string | null>(null);
+
+  const SCHEDULE_TEXT: Record<Schedule["kind"], { title: string; help: string }> = {
+    manual: { title: "Only when I run it", help: "Nothing happens until you press Run now." },
+    every: { title: "Every…", help: "Repeats while Orbit is open, counted from the last run." },
+    daily: { title: "Daily at…", help: "Once a day at this time, if Orbit is open then." },
+  };
+
+  /** Reads the schedule from the form. Returns a message instead when the values do not make sense. */
+  function readSchedule(): Schedule | string {
+    switch (scheduleKind) {
+      case "manual":
+        return { kind: "manual" };
+      case "every": {
+        const minutes = intervalMinutes(intervalValue, intervalUnit);
+        return minutes === null ? "Choose a whole number of minutes or hours, up to seven days." : { kind: "every", minutes };
+      }
+      case "daily": {
+        const time = parseTime(dailyTime);
+        return time === null ? "Choose a time of day." : { kind: "daily", ...time };
+      }
+    }
+  }
 
   const KIND_TEXT: Record<JobKind, { title: string; help: string }> = {
     copy: {
@@ -42,9 +74,14 @@
       error = "Choose both the source and the destination.";
       return;
     }
+    const schedule = readSchedule();
+    if (typeof schedule === "string") {
+      error = schedule;
+      return;
+    }
     busy = true;
     error = null;
-    const input: JobInput = { name, kind, source, destination };
+    const input: JobInput = { name, kind, source, destination, schedule };
     try {
       const view = existing ? await api.updateJob(existing.id, input) : await api.createJob(input);
       onSaved(view);
@@ -88,6 +125,39 @@
 
     <EndpointField label="Source" value={source} onChange={(endpoint) => (source = endpoint)} disabled={busy} />
     <EndpointField label="Destination" value={destination} onChange={(endpoint) => (destination = endpoint)} disabled={busy} />
+
+    <fieldset class="kinds" disabled={busy}>
+      <legend>When to run</legend>
+      {#each ["manual", "every", "daily"] as const as option (option)}
+        <label class="kind" class:selected={scheduleKind === option}>
+          <input type="radio" name="schedule" value={option} bind:group={scheduleKind} />
+          <span class="kind-title">{SCHEDULE_TEXT[option].title}</span>
+          <span class="kind-help">{SCHEDULE_TEXT[option].help}</span>
+          {#if option === "every" && scheduleKind === "every"}
+            <span class="kind-controls">
+              <input
+                type="number"
+                class="short"
+                min="1"
+                step="1"
+                inputmode="numeric"
+                aria-label="Run every"
+                bind:value={intervalValue}
+              />
+              <select aria-label="Unit" bind:value={intervalUnit}>
+                <option value="minutes">minutes</option>
+                <option value="hours">hours</option>
+              </select>
+            </span>
+          {:else if option === "daily" && scheduleKind === "daily"}
+            <span class="kind-controls">
+              <input type="time" aria-label="Time of day" bind:value={dailyTime} />
+            </span>
+          {/if}
+        </label>
+      {/each}
+    </fieldset>
+    <p class="note">Schedules only run while Orbit is open. A run missed while it was closed is not made up.</p>
 
     {#if error}<p class="error" role="alert">{error}</p>{/if}
 
@@ -155,6 +225,28 @@
   }
   .kind-help {
     grid-column: 2 / 4;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+  .kind-controls {
+    grid-column: 2 / 4;
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .kind-controls input,
+  .kind-controls select {
+    background: var(--control-bg);
+    border: none;
+    border-radius: var(--radius-control);
+    padding: 4px 8px;
+    user-select: text;
+  }
+  .kind-controls .short {
+    width: 72px;
+  }
+  .note {
+    margin: -4px 0 0;
     color: var(--text-secondary);
     font-size: 12px;
   }

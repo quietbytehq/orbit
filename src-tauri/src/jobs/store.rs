@@ -28,7 +28,7 @@ pub fn save(path: &Path, jobs: &[Job]) -> AppResult<()> {
 mod tests {
     use super::*;
     use crate::files::Endpoint;
-    use crate::jobs::JobKind;
+    use crate::jobs::{JobKind, Schedule};
 
     #[test]
     fn round_trips_and_treats_missing_as_empty() {
@@ -46,6 +46,10 @@ mod tests {
                 path: "b".into(),
             },
             enabled: false,
+            schedule: Schedule::Daily {
+                hour: 7,
+                minute: 30,
+            },
             runs: vec![],
         }];
         save(&path, &jobs).unwrap();

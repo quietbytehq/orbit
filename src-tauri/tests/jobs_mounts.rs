@@ -8,7 +8,7 @@ use common::spec;
 use orbit_lib::files::Endpoint;
 use orbit_lib::jobs::runner::Runner;
 use orbit_lib::jobs::store;
-use orbit_lib::jobs::{Job, JobInput, JobKind, JobView, RunOutcome};
+use orbit_lib::jobs::{Job, JobInput, JobKind, JobView, RunOutcome, Schedule};
 use orbit_lib::mounts;
 use orbit_lib::paths::AppPaths;
 use orbit_lib::rclone::{RcdState, Supervisor};
@@ -80,6 +80,7 @@ fn input(name: &str, kind: JobKind, source: Endpoint, destination: Endpoint) -> 
         kind,
         source,
         destination,
+        schedule: Schedule::Manual,
     }
 }
 
@@ -275,6 +276,7 @@ async fn a_run_cut_short_by_a_crash_is_marked_failed_on_next_start() {
         source: local(&fx.root),
         destination: remote("nowhere", ""),
         enabled: true,
+        schedule: Schedule::Manual,
         runs: vec![orbit_lib::jobs::RunRecord {
             id: "run-1".into(),
             started_at: 1,
@@ -284,6 +286,7 @@ async fn a_run_cut_short_by_a_crash_is_marked_failed_on_next_start() {
             bytes: 0,
             errors: 0,
             log_file: "job-job-crashed-run-1.log".into(),
+            scheduled: false,
         }],
     };
     store::save(&fx.paths.jobs(), &[job]).unwrap();
@@ -297,6 +300,86 @@ async fn a_run_cut_short_by_a_crash_is_marked_failed_on_next_start() {
     assert!(recovered.progress.is_none());
 
     fx.supervisor.shutdown().await;
+}
+
+#[tokio::test]
+async fn scheduled_jobs_start_when_due_and_only_while_idle_enabled_and_connected() {
+    let Some(fx) = fixture().await else { return };
+    alias(&fx, "orbit-dst", &fx.root.join("remote")).await;
+    let source = fx.root.join("source");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("one.txt"), b"1").unwrap();
+    let runner = Runner::start(fx.supervisor.clone(), &fx.paths, || {}).unwrap();
+
+    let mut every = input(
+        "Every minute",
+        JobKind::Copy,
+        local(&source),
+        remote("orbit-dst", "auto"),
+    );
+    every.schedule = Schedule::Every { minutes: 1 };
+    let armed = orbit_lib::jobs::runner::now_secs();
+    let job = runner.create(every).unwrap();
+    let next = job.next_run_at.expect("a scheduled job has a next run");
+    assert!(
+        (armed + 60..=armed + 62).contains(&next),
+        "next run {next} vs armed {armed}"
+    );
+
+    // Not due yet, then due exactly once: a second look while it runs starts nothing.
+    assert!(runner.run_due(armed + 30).is_empty());
+    assert_eq!(runner.run_due(armed + 61), vec![job.job.id.clone()]);
+    assert!(runner.run_due(armed + 61).is_empty());
+    let (outcome, _, _) = wait_for_run(&runner, &job.job.id).await;
+    assert_eq!(outcome, RunOutcome::Succeeded);
+    assert_eq!(fs::read(fx.root.join("remote/auto/one.txt")).unwrap(), b"1");
+
+    let view = runner
+        .list()
+        .into_iter()
+        .find(|v| v.job.id == job.job.id)
+        .unwrap();
+    assert!(view.job.runs[0].scheduled, "the run is marked as scheduled");
+    let log = runner.read_log(&job.job.id, &view.job.runs[0].id).unwrap();
+    assert!(log.contains("started by the schedule"), "{log}");
+    // The next run counts from the run that just happened.
+    let started = view.job.runs[0].started_at;
+    assert_eq!(view.next_run_at, Some(started + 60));
+
+    // Disabled jobs never run on their own, and have no next run.
+    runner.set_enabled(&job.job.id, false).unwrap();
+    assert!(runner.run_due(armed + 10_000).is_empty());
+    assert!(runner.list()[0].next_run_at.is_none());
+
+    // Turning a job back on re-arms it instead of running it at once.
+    let before_enable = orbit_lib::jobs::runner::now_secs();
+    runner.set_enabled(&job.job.id, true).unwrap();
+    assert!(runner.run_due(before_enable + 30).is_empty());
+    assert!(runner.list()[0].next_run_at.unwrap() >= before_enable + 60);
+
+    // Manual jobs never run on their own.
+    let manual = runner
+        .create(input(
+            "By hand",
+            JobKind::Copy,
+            local(&source),
+            remote("orbit-dst", "manual"),
+        ))
+        .unwrap();
+    assert!(manual.next_run_at.is_none());
+    let started = runner.run_due(armed + 10_000);
+    assert_eq!(
+        started,
+        vec![job.job.id.clone()],
+        "only the scheduled job starts"
+    );
+    let (outcome, _, _) = wait_for_run(&runner, &job.job.id).await;
+    assert_eq!(outcome, RunOutcome::Succeeded);
+    assert!(!fx.root.join("remote/manual").exists());
+
+    // Nothing starts while rclone is down.
+    fx.supervisor.shutdown().await;
+    assert!(runner.run_due(armed + 100_000).is_empty());
 }
 
 #[tokio::test]

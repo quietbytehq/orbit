@@ -167,13 +167,27 @@ confirmation). Delete removes only the rclone config section.
 Sync jobs:
 - Kinds: **Sync** (`sync/sync`, makes destination identical to source, deletes extras) and
   **Copy** (`sync/copy`, never deletes). Each job has a name, source, destination, and kind.
-- Jobs are stored in `jobs.json` (names and paths only). Run now, enable or disable, edit,
-  delete. Running jobs are asynchronous (`_async: true`); Orbit polls `job/status`.
+- Jobs are stored in `jobs.json` (names, paths and schedule only). Run now, enable or disable,
+  edit, delete. Running jobs are asynchronous (`_async: true`); Orbit polls `job/status`.
 - Progress: bytes, files, current file, errors count, elapsed time.
 - Errors and logs: each run writes `logs/job-<id>-<timestamp>.log` with the summary, every error
   message returned by `core/stats`, and the final result. The job page lists the last 20 runs and
   shows the log of any run.
-- Sync is a manual trigger in v0.1. Scheduling is roadmap.
+- Scheduling. Each job has a schedule: **manual** (default), **every N minutes** (1 minute to
+  7 days; the form offers minutes or hours), or **daily at a local time**. Schedules fire only
+  while Orbit is running: nothing runs on login, and a run missed while Orbit was closed is not
+  made up (that stays on the roadmap, §9).
+  - The clock for a job is its *anchor*: the later of the moment the schedule was armed and the
+    start of its newest run. Arming happens at Orbit start and whenever the job is saved or turned
+    on, so re-enabling an old job does not start it at once. "Every N" is due at anchor + N;
+    "daily" is due at the first such wall-clock time after the anchor. A manual run therefore
+    resets the interval, and a daily job runs at most once a day.
+  - The runner ticks every 15 s and starts every enabled, scheduled, idle job that is due, but only
+    while rcd is healthy; a job that fell due while rclone was down starts once it is back.
+  - `JobView.next_run_at` tells the UI when the next automatic run is; runs started by the
+    schedule are flagged (`RunRecord.scheduled`) in the history and in the run log.
+  - Pure functions (`jobs::schedule`) compute the next run and are unit tested; the integration
+    test drives `Runner::run_due` with explicit times against a real rclone.
 
 Mounts:
 - Mount a remote with `mount/mount`. Linux mounts to a directory (default `~/Orbit/<remote>`).
@@ -246,7 +260,8 @@ Each milestone is committed to local git with a message describing it. Nothing i
 ## 7. Testing
 
 - Rust backend: unit tests for the status function, provider definitions, name validation, config
-  and settings serialization, the transfer queue, and the job log writer. Integration tests spawn a
+  and settings serialization, the transfer queue, the job log writer, and the job scheduler's time
+  arithmetic. Integration tests spawn a
   real rclone `rcd` (from the sidecar or `PATH`) and use the `local` backend as a stand-in remote for
   wizard, file, transfer, and job flows. Integration tests skip with a message when no rclone is
   available.
@@ -267,7 +282,9 @@ Each milestone is committed to local git with a message describing it. Nothing i
 
 ## 9. Out of scope for v0.1 (roadmap)
 
-- Scheduled syncs (cron-like schedules, run on login, missed-run handling).
+- Richer scheduling: cron-like expressions, weekly schedules, run on login, and catch-up of runs
+  missed while Orbit was closed. (Interval and daily schedules that run while Orbit is open are
+  in, §4.3.)
 - Bisync (two-way sync) with a conflict model and conflict UI.
 - Conflict handling for one-way sync and copy (choose winner, keep both).
 - Advanced remote editor (every rclone option, with search and help text).

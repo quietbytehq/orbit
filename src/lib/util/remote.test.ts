@@ -67,8 +67,10 @@ describe("remotesInUse", () => {
     source: { kind: "local", path: "/home/ana" },
     destination: { kind: "remote", remote: "Archive", path: "" },
     enabled: true,
+    schedule: { kind: "manual" },
     runs: [],
     progress: { runId: "r", bytes: 0, totalBytes: 0, files: 0, errors: 0, speed: 0, etaSeconds: null, currentFile: null },
+    nextRunAt: null,
   };
 
   it("collects remotes from active transfers and running jobs", () => {

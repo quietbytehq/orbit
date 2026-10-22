@@ -21,12 +21,13 @@ Orbit ships its own rclone and runs it as a background daemon (`rclone rcd`) on 
 | Upload (picker or drag and drop), download, copy and move between remotes | Done, tested |
 | Transfer queue with progress, speed, ETA and cancel; concurrency from settings | Done, tested |
 | Sync and copy jobs with run history (last 20 runs), logs, error counts | Done, tested |
+| Scheduled jobs: every N minutes or hours, or daily at a time, while Orbit is open | Done, tested against a real rclone |
 | Mount and unmount (Linux via FUSE 3; Windows via WinFsp with a drive letter) | Done on Linux, tested with a real FUSE mount. Windows not run |
 | Settings: theme, concurrent transfers, custom rclone path, log level, splash | Done |
 | Packaging: AppImage and `.deb` | Built on Linux, and the `.deb` was launched from its install layout |
 | Packaging: `.msi` | Script and config in place. Not built, because WiX needs Windows |
 
-Out of scope for v0.1 (see SPEC §9): scheduled syncs, bisync, conflict handling, the advanced remote editor, auto-update, macOS.
+Out of scope for v0.1 (see SPEC §9): cron-style schedules and missed-run catch-up, bisync, conflict handling, the advanced remote editor, auto-update, macOS.
 
 ## Not verified yet
 
@@ -116,7 +117,7 @@ Everything is under the Tauri app data folder: `~/.local/share/com.orbit.rclone`
 ## Known limitations
 
 - Mounts end when Orbit quits. They are not restored on the next launch.
-- Sync jobs run only when you start them. Scheduling is on the roadmap.
+- Scheduled jobs run only while Orbit is open. A run that was due while Orbit was closed is not made up, and nothing runs on login.
 - Deletes are permanent. Orbit does not use a provider's trash.
 - A job's error list shows each new error as it appears, not every error from the run.
 - Browser sign-in uses rclone's shared OAuth client IDs, so providers may rate-limit heavy use.

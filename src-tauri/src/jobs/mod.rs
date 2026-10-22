@@ -3,6 +3,7 @@
 
 pub mod commands;
 pub mod runner;
+pub mod schedule;
 pub mod store;
 
 use crate::files::Endpoint;
@@ -20,6 +21,20 @@ pub enum JobKind {
     Copy,
 }
 
+/// When a job runs on its own. Schedules fire only while Orbit is running; runs missed while it
+/// was closed are not caught up, and a disabled job never runs on its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Schedule {
+    /// Only when the user presses "Run now".
+    #[default]
+    Manual,
+    /// Every `minutes` minutes, counted from the newest run or from when the schedule was armed.
+    Every { minutes: u32 },
+    /// Once a day at this local time.
+    Daily { hour: u8, minute: u8 },
+}
+
 /// A saved job. Holds names and locations only, never credentials.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,6 +45,8 @@ pub struct Job {
     pub source: Endpoint,
     pub destination: Endpoint,
     pub enabled: bool,
+    #[serde(default)]
+    pub schedule: Schedule,
     #[serde(default)]
     pub runs: Vec<RunRecord>,
 }
@@ -56,6 +73,9 @@ pub struct RunRecord {
     pub errors: u64,
     /// File name inside the logs folder.
     pub log_file: String,
+    /// True when the schedule started this run rather than the user.
+    #[serde(default)]
+    pub scheduled: bool,
 }
 
 /// Live progress for a running job, shown on the Sync page.
@@ -79,6 +99,8 @@ pub struct JobView {
     #[serde(flatten)]
     pub job: Job,
     pub progress: Option<Progress>,
+    /// Unix time of the next automatic run. `None` for manual or disabled jobs.
+    pub next_run_at: Option<u64>,
 }
 
 /// Input for creating or editing a job.
@@ -89,6 +111,8 @@ pub struct JobInput {
     pub kind: JobKind,
     pub source: Endpoint,
     pub destination: Endpoint,
+    #[serde(default)]
+    pub schedule: Schedule,
 }
 
 /// Checks the input and returns the trimmed name.
@@ -111,7 +135,27 @@ pub fn validate(input: &JobInput) -> crate::error::AppResult<String> {
             "The source and destination must be different folders.",
         ));
     }
+    validate_schedule(input.schedule)?;
     Ok(name.to_owned())
+}
+
+/// Rejects intervals outside one minute to seven days and times that do not exist.
+pub fn validate_schedule(schedule: Schedule) -> crate::error::AppResult<()> {
+    use crate::error::AppError;
+    match schedule {
+        Schedule::Manual => Ok(()),
+        Schedule::Every { minutes: 0 } => Err(AppError::invalid("Run at least one minute apart.")),
+        Schedule::Every { minutes } if minutes > schedule::MAX_INTERVAL_MINUTES => {
+            Err(AppError::invalid(
+                "Runs can be up to seven days apart. For longer, run the job by hand.",
+            ))
+        }
+        Schedule::Every { .. } => Ok(()),
+        Schedule::Daily { hour, minute } if hour > 23 || minute > 59 => Err(AppError::invalid(
+            "Choose a time of day between 00:00 and 23:59.",
+        )),
+        Schedule::Daily { .. } => Ok(()),
+    }
 }
 
 #[cfg(test)]
@@ -124,6 +168,7 @@ mod tests {
             kind: JobKind::Sync,
             source,
             destination,
+            schedule: Schedule::Manual,
         }
     }
 
@@ -172,10 +217,67 @@ mod tests {
             source: remote("work", "Photos"),
             destination: Endpoint::Local { path: "/x".into() },
             enabled: true,
+            schedule: Schedule::Every { minutes: 30 },
             runs: vec![],
         };
         let json = serde_json::to_value(&job).unwrap();
         assert_eq!(json["kind"], "copy");
         assert_eq!(json["source"]["kind"], "remote");
+        assert_eq!(json["schedule"]["kind"], "every");
+        assert_eq!(json["schedule"]["minutes"], 30);
+    }
+
+    #[test]
+    fn jobs_saved_before_schedules_existed_load_as_manual() {
+        let json = r#"{"id":"j","name":"n","kind":"copy","source":{"kind":"local","path":"/a"},
+            "destination":{"kind":"remote","remote":"w","path":""},"enabled":true,
+            "runs":[{"id":"r","startedAt":1,"finishedAt":2,"outcome":{"state":"succeeded"},
+            "files":0,"bytes":0,"errors":0,"logFile":"x.log"}]}"#;
+        let job: Job = serde_json::from_str(json).unwrap();
+        assert_eq!(job.schedule, Schedule::Manual);
+        assert!(!job.runs[0].scheduled);
+    }
+
+    #[test]
+    fn schedule_limits() {
+        assert!(validate_schedule(Schedule::Manual).is_ok());
+        assert!(validate_schedule(Schedule::Every { minutes: 1 }).is_ok());
+        assert!(validate_schedule(Schedule::Every { minutes: 0 }).is_err());
+        assert!(
+            validate_schedule(Schedule::Every {
+                minutes: 7 * 24 * 60
+            })
+            .is_ok()
+        );
+        assert!(
+            validate_schedule(Schedule::Every {
+                minutes: 7 * 24 * 60 + 1
+            })
+            .is_err()
+        );
+        assert!(
+            validate_schedule(Schedule::Daily {
+                hour: 23,
+                minute: 59
+            })
+            .is_ok()
+        );
+        assert!(
+            validate_schedule(Schedule::Daily {
+                hour: 24,
+                minute: 0
+            })
+            .is_err()
+        );
+        assert!(
+            validate_schedule(Schedule::Daily {
+                hour: 9,
+                minute: 60
+            })
+            .is_err()
+        );
+        let mut input = input(remote("a", "x"), remote("b", "y"));
+        input.schedule = Schedule::Every { minutes: 0 };
+        assert!(validate(&input).is_err());
     }
 }

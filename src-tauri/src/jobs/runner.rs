@@ -1,11 +1,13 @@
 //! Runs jobs. Each run is an rclone async job; progress and new errors are polled and written to
 //! a per-run log file. Finished runs are kept in `jobs.json`, up to `HISTORY_LIMIT` per job.
+//! A background tick starts scheduled jobs when they fall due (see `schedule`).
 
-use super::store;
 use super::{HISTORY_LIMIT, Job, JobInput, JobView, Progress, RunOutcome, RunRecord, validate};
+use super::{schedule, store};
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::files::endpoint_fs;
 use crate::paths::AppPaths;
+use crate::rclone::RcdState;
 use crate::rclone::Supervisor;
 use serde::Deserialize;
 use serde_json::json;
@@ -13,7 +15,7 @@ use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -31,6 +33,8 @@ struct Running {
 struct State {
     jobs: Vec<Job>,
     running: HashMap<String, Running>,
+    /// When each job's schedule was last armed (Orbit start, save, or enable), by job id.
+    armed: HashMap<String, u64>,
 }
 
 pub struct Runner {
@@ -68,7 +72,6 @@ struct JobStatus {
     error: String,
 }
 
-
 #[derive(Deserialize)]
 struct JobReply {
     jobid: u64,
@@ -98,6 +101,8 @@ impl Runner {
     ) -> AppResult<Arc<Self>> {
         let mut jobs = store::load(&paths.jobs())?;
         recover_interrupted(&mut jobs);
+        let now = now_secs();
+        let armed = jobs.iter().map(|job| (job.id.clone(), now)).collect();
         let runner = Arc::new(Self {
             supervisor,
             jobs_file: paths.jobs(),
@@ -105,24 +110,58 @@ impl Runner {
             state: Mutex::new(State {
                 jobs,
                 running: HashMap::new(),
+                armed,
             }),
             on_change: Arc::new(on_change),
         });
         runner.persist()?;
+        Self::spawn_scheduler(Arc::downgrade(&runner));
         Ok(runner)
+    }
+
+    /// Ticks in the background and starts jobs that are due. Holds only a weak reference, so the
+    /// runner (and the tick) go away with the app.
+    fn spawn_scheduler(runner: Weak<Self>) {
+        tauri::async_runtime::spawn(async move {
+            loop {
+                tokio::time::sleep(schedule::TICK).await;
+                let Some(runner) = runner.upgrade() else {
+                    break;
+                };
+                runner.run_due(now_secs());
+            }
+        });
     }
 
     pub fn list(&self) -> Vec<JobView> {
         let state = self.state.lock().expect("jobs lock");
-        state
-            .jobs
-            .iter()
-            .map(|job| JobView {
-                job: job.clone(),
-                progress: state
-                    .running
-                    .get(&job.id)
-                    .map(|running| running.progress.clone()),
+        state.jobs.iter().map(|job| state.view(job)).collect()
+    }
+
+    /// Starts every enabled, scheduled, idle job whose next run is at or before `now`. Nothing
+    /// starts while rclone is not healthy; such jobs stay due and start once it is. Returns the ids
+    /// of the jobs started.
+    pub fn run_due(self: &Arc<Self>, now: u64) -> Vec<String> {
+        if !matches!(self.supervisor.state(), RcdState::Healthy { .. }) {
+            return Vec::new();
+        }
+        let due: Vec<String> = {
+            let state = self.state.lock().expect("jobs lock");
+            state
+                .jobs
+                .iter()
+                .filter(|job| !state.running.contains_key(&job.id))
+                .filter(|job| state.next_run_at(job).is_some_and(|next| next <= now))
+                .map(|job| job.id.clone())
+                .collect()
+        };
+        due.into_iter()
+            .filter(|id| match self.start_run(id, true) {
+                Ok(_) => true,
+                Err(err) => {
+                    eprintln!("Orbit: scheduled job {id} did not start: {}", err.message);
+                    false
+                }
             })
             .collect()
     }
@@ -141,18 +180,18 @@ impl Runner {
             source: input.source,
             destination: input.destination,
             enabled: true,
+            schedule: input.schedule,
             runs: Vec::new(),
         };
-        {
+        let view = {
             let mut state = self.state.lock().expect("jobs lock");
+            state.armed.insert(job.id.clone(), now_secs());
             state.jobs.push(job.clone());
-        }
+            state.view(&job)
+        };
         self.persist()?;
         self.notify();
-        Ok(JobView {
-            job,
-            progress: None,
-        })
+        Ok(view)
     }
 
     pub fn update(&self, id: &str, input: JobInput) -> AppResult<JobView> {
@@ -167,20 +206,26 @@ impl Runner {
             job.kind = input.kind;
             job.source = input.source;
             job.destination = input.destination;
-            JobView {
-                job: job.clone(),
-                progress: None,
-            }
+            job.schedule = input.schedule;
+            let job = job.clone();
+            // Saving re-arms the schedule, so a new interval counts from now.
+            state.armed.insert(id.to_owned(), now_secs());
+            state.view(&job)
         };
         self.persist()?;
         self.notify();
         Ok(view)
     }
 
+    /// Turning a job on re-arms its schedule, so it does not start at once just because its last
+    /// run is old.
     pub fn set_enabled(&self, id: &str, enabled: bool) -> AppResult<()> {
         {
             let mut state = self.state.lock().expect("jobs lock");
             find_mut(&mut state.jobs, id)?.enabled = enabled;
+            if enabled {
+                state.armed.insert(id.to_owned(), now_secs());
+            }
         }
         self.persist()?;
         self.notify();
@@ -198,6 +243,7 @@ impl Runner {
             if state.jobs.len() == before {
                 return Err(AppError::invalid("That job no longer exists."));
             }
+            state.armed.remove(id);
         }
         self.persist()?;
         self.notify();
@@ -206,6 +252,10 @@ impl Runner {
 
     /// Starts a run in the background and returns its id.
     pub fn run(self: &Arc<Self>, id: &str) -> AppResult<String> {
+        self.start_run(id, false)
+    }
+
+    fn start_run(self: &Arc<Self>, id: &str, scheduled: bool) -> AppResult<String> {
         let run_id = new_id("run");
         let job = {
             let mut state = self.state.lock().expect("jobs lock");
@@ -235,7 +285,7 @@ impl Runner {
         let runner = self.clone();
         let run_for_task = run_id.clone();
         tauri::async_runtime::spawn(async move {
-            runner.execute(job, run_for_task).await;
+            runner.execute(job, run_for_task, scheduled).await;
         });
         Ok(run_id)
     }
@@ -290,14 +340,14 @@ impl Runner {
         ))
     }
 
-    async fn execute(self: Arc<Self>, job: Job, run_id: String) {
+    async fn execute(self: Arc<Self>, job: Job, run_id: String, scheduled: bool) {
         let started_at = now_secs();
         let started = Instant::now();
         let log_file = format!("job-{}-{}.log", job.id, run_id);
         let log_path = self.logs_dir.join(&log_file);
         let mut log = RunLog::open(log_path, started);
         log.line(&format!(
-            "{} job \"{}\" from {} to {}",
+            "{} job \"{}\" from {} to {}{}",
             match job.kind {
                 super::JobKind::Sync => "Sync",
                 super::JobKind::Copy => "Copy",
@@ -305,6 +355,11 @@ impl Runner {
             job.name,
             describe(&job.source),
             describe(&job.destination),
+            if scheduled {
+                " (started by the schedule)"
+            } else {
+                ""
+            },
         ));
 
         let outcome = self.drive(&job, &run_id, &mut log).await;
@@ -345,6 +400,7 @@ impl Runner {
             bytes,
             errors,
             log_file,
+            scheduled,
         };
         self.finish(&job.id, record);
     }
@@ -452,6 +508,24 @@ impl Runner {
     }
 }
 
+impl State {
+    fn next_run_at(&self, job: &Job) -> Option<u64> {
+        let armed = self.armed.get(&job.id).copied().unwrap_or(0);
+        schedule::next_run_at(job, armed)
+    }
+
+    fn view(&self, job: &Job) -> JobView {
+        JobView {
+            job: job.clone(),
+            progress: self
+                .running
+                .get(&job.id)
+                .map(|running| running.progress.clone()),
+            next_run_at: self.next_run_at(job),
+        }
+    }
+}
+
 /// Keeps the newest `HISTORY_LIMIT` runs and returns the log files of the ones dropped.
 pub fn trim_history(runs: &mut Vec<RunRecord>) -> Vec<String> {
     if runs.len() <= HISTORY_LIMIT {
@@ -550,6 +624,7 @@ mod tests {
             bytes: 0,
             errors: 0,
             log_file: format!("job-x-{id}.log"),
+            scheduled: false,
         }
     }
 
@@ -578,6 +653,7 @@ mod tests {
             source: Endpoint::Local { path: "/a".into() },
             destination: Endpoint::Local { path: "/b".into() },
             enabled: true,
+            schedule: super::super::Schedule::Manual,
             runs: vec![
                 run("1", RunOutcome::Running),
                 run("2", RunOutcome::Succeeded),

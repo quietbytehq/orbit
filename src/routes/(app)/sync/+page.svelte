@@ -8,6 +8,7 @@
   import { jobs } from "$lib/stores/jobs.svelte";
   import { rcd } from "$lib/stores/rcd.svelte";
   import { endpointLabel } from "$lib/util/endpoint";
+  import { nextRunLabel, scheduleLabel } from "$lib/util/schedule";
   import { formatBytes, formatDuration, formatSpeed, timeAgo } from "$lib/util/format";
 
   let creating = $state(false);
@@ -16,9 +17,13 @@
   let expanded = $state<Record<string, boolean>>({});
   let logTitle = $state("");
   let logText = $state<string | null>(null);
+  /** Unix seconds, refreshed every half minute so "next run in…" stays right. */
+  let now = $state(Date.now() / 1000);
 
   onMount(() => {
     void jobs.start();
+    const clock = window.setInterval(() => (now = Date.now() / 1000), 30_000);
+    return () => window.clearInterval(clock);
   });
 
   function outcomeLabel(outcome: RunOutcome): string {
@@ -90,6 +95,7 @@
           <div class="title">
             <span class="name">{view.name}</span>
             <span class="pill">{view.kind === "sync" ? "Sync" : "Copy"}</span>
+            {#if view.schedule.kind !== "manual"}<span class="pill">{scheduleLabel(view.schedule)}</span>{/if}
           </div>
           <label class="toggle">
             <input
@@ -117,10 +123,10 @@
           </div>
         {:else if last}
           <p class="status" class:problem={last.outcome.state === "failed"}>
-            Last run {timeAgo(last.finishedAt ?? last.startedAt)}: {outcomeTitle(last.outcome)}{last.files > 0 ? ` · ${last.files} files` : ""}
+            Last run {timeAgo(last.finishedAt ?? last.startedAt)}: {outcomeTitle(last.outcome)}{last.files > 0 ? ` · ${last.files} files` : ""}{view.nextRunAt !== null ? ` · Next run ${nextRunLabel(view.nextRunAt, now)}` : ""}
           </p>
         {:else}
-          <p class="status">Never run</p>
+          <p class="status">Never run{view.nextRunAt !== null ? ` · Next run ${nextRunLabel(view.nextRunAt, now)}` : ""}</p>
         {/if}
 
         <div class="actions">
@@ -154,6 +160,7 @@
                   <tr>
                     <td>{new Date(run.startedAt * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</td>
                     <td class="outcome" data-state={run.outcome.state} title={outcomeTitle(run.outcome)}>{outcomeLabel(run.outcome)}</td>
+                    <td class="muted">{run.scheduled ? "Scheduled" : "By hand"}</td>
                     <td>{run.files} files</td>
                     <td>{run.errors > 0 ? `${run.errors} errors` : ""}</td>
                     <td class="end"><button class="link" onclick={() => openLog(view, run.id, run.startedAt)}>View log</button></td>
@@ -323,6 +330,9 @@
   }
   .runs .end {
     text-align: right;
+  }
+  .runs .muted {
+    color: var(--text-secondary);
   }
   .link {
     appearance: none;
