@@ -5,7 +5,11 @@ import type {
   ConnectionTest,
   FileEntry,
   ItemRef,
+  JobInput,
+  JobView,
   LocalEntry,
+  MountInfo,
+  MountSupport,
   NewRemote,
   ProviderDef,
   RcdState,
@@ -20,6 +24,7 @@ export type * from "./types";
 export const RCD_STATE_EVENT = "rcd://state";
 export const SIGN_IN_URL_EVENT = "wizard://sign-in-url";
 export const TRANSFERS_EVENT = "transfers://update";
+export const JOBS_EVENT = "jobs://update";
 
 /** Typed wrappers around Tauri commands. Each one rejects with an AppError on failure. */
 export const api = {
@@ -49,6 +54,21 @@ export const api = {
   listTransfers: () => invoke<TransferItem[]>("list_transfers"),
   cancelTransfer: (id: number) => invoke<void>("cancel_transfer", { id }),
   clearFinishedTransfers: () => invoke<void>("clear_finished_transfers"),
+
+  listJobs: () => invoke<JobView[]>("list_jobs"),
+  createJob: (input: JobInput) => invoke<JobView>("create_job", { input }),
+  updateJob: (id: string, input: JobInput) => invoke<JobView>("update_job", { id, input }),
+  setJobEnabled: (id: string, enabled: boolean) => invoke<void>("set_job_enabled", { id, enabled }),
+  deleteJob: (id: string) => invoke<void>("delete_job", { id }),
+  runJob: (id: string) => invoke<string>("run_job", { id }),
+  cancelJob: (id: string) => invoke<void>("cancel_job", { id }),
+  readJobLog: (jobId: string, runId: string) => invoke<string>("read_job_log", { jobId, runId }),
+
+  mountSupport: () => invoke<MountSupport>("mount_support"),
+  suggestMountLocation: (remote: string) => invoke<string>("suggest_mount_location", { remote }),
+  listMounts: () => invoke<MountInfo[]>("list_mounts"),
+  mountRemote: (remote: string, mountPoint: string) => invoke<void>("mount_remote", { remote, mountPoint }),
+  unmountRemote: (mountPoint: string) => invoke<void>("unmount_remote", { mountPoint }),
 };
 
 export function onRcdState(handler: (state: RcdState) => void): Promise<UnlistenFn> {
@@ -57,6 +77,10 @@ export function onRcdState(handler: (state: RcdState) => void): Promise<Unlisten
 
 export function onTransfers(handler: (items: TransferItem[]) => void): Promise<UnlistenFn> {
   return listen<TransferItem[]>(TRANSFERS_EVENT, (event) => handler(event.payload));
+}
+
+export function onJobs(handler: (jobs: JobView[]) => void): Promise<UnlistenFn> {
+  return listen<JobView[]>(JOBS_EVENT, (event) => handler(event.payload));
 }
 
 export function onSignInUrl(handler: (url: string) => void): Promise<UnlistenFn> {

@@ -58,6 +58,7 @@
   onMount(async () => {
     try {
       remotes = await api.listRemotes();
+      if (!remote && remotes.length > 0) remote = remotes[0].name;
     } catch (err) {
       error = errorMessage(err);
     }

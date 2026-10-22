@@ -150,3 +150,79 @@ export interface ItemRef {
   path: string;
   isDir: boolean;
 }
+
+/** Mirrors `jobs::JobKind`. */
+export type JobKind = "sync" | "copy";
+
+/** Mirrors `jobs::RunOutcome`. */
+export type RunOutcome =
+  | { state: "running" }
+  | { state: "succeeded" }
+  | { state: "failed"; message: string }
+  | { state: "cancelled" };
+
+/** Mirrors `jobs::RunRecord`. */
+export interface RunRecord {
+  id: string;
+  startedAt: number;
+  finishedAt: number | null;
+  outcome: RunOutcome;
+  files: number;
+  bytes: number;
+  errors: number;
+  logFile: string;
+}
+
+/** Mirrors `jobs::Job`. */
+export interface Job {
+  id: string;
+  name: string;
+  kind: JobKind;
+  source: Endpoint;
+  destination: Endpoint;
+  enabled: boolean;
+  runs: RunRecord[];
+}
+
+/** Mirrors `jobs::Progress`. */
+export interface JobProgress {
+  runId: string;
+  bytes: number;
+  totalBytes: number;
+  files: number;
+  errors: number;
+  speed: number;
+  etaSeconds: number | null;
+  currentFile: string | null;
+}
+
+/** Mirrors `jobs::JobView`. */
+export interface JobView extends Job {
+  progress: JobProgress | null;
+}
+
+/** Mirrors `jobs::JobInput`. */
+export interface JobInput {
+  name: string;
+  kind: JobKind;
+  source: Endpoint;
+  destination: Endpoint;
+}
+
+/** Mirrors `mounts::MountInfo`. */
+export interface MountInfo {
+  remote: string;
+  mountPoint: string;
+  mountedOn: string | null;
+}
+
+/** Mirrors `mounts::WinFspStatus`. */
+export type WinFspStatus = { state: "notApplicable" } | { state: "installed" } | { state: "missing" };
+
+/** Mirrors `mounts::MountSupport`. */
+export interface MountSupport {
+  platform: "linux" | "windows" | "other";
+  available: boolean;
+  winfsp: WinFspStatus;
+  requirement: string | null;
+}

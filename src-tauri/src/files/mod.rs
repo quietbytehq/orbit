@@ -59,6 +59,14 @@ pub fn split(path: &str) -> (String, String) {
     }
 }
 
+/// rclone fs string for a whole folder, whichever side it is on.
+pub fn endpoint_fs(endpoint: &Endpoint) -> String {
+    match endpoint {
+        Endpoint::Remote { remote, path } => remote_fs(remote, path),
+        Endpoint::Local { path } => local_fs(path),
+    }
+}
+
 /// rclone fs string for a remote folder.
 pub fn remote_fs(remote: &str, path: &str) -> String {
     format!("{remote}:{}", normalize(path))

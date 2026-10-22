@@ -20,6 +20,8 @@
   const sections = [
     { href: "/", label: "Overview" },
     { href: "/remotes", label: "Remotes" },
+    { href: "/sync", label: "Sync" },
+    { href: "/mounts", label: "Mounts" },
   ];
 </script>
 

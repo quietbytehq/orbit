@@ -1,6 +1,8 @@
 mod commands;
 pub mod error;
 pub mod files;
+pub mod jobs;
+pub mod mounts;
 pub mod paths;
 mod reveal;
 pub mod remotes;
@@ -11,6 +13,8 @@ mod tray;
 
 use paths::AppPaths;
 use files::transfers::{Item as TransferItem, TransferQueue};
+use jobs::runner::Runner;
+use jobs::JobView;
 use remotes::health::HealthStore;
 use std::sync::Arc;
 use reveal::{RevealGate, RevealState};
@@ -21,6 +25,7 @@ use tray::TrayHandle;
 
 pub const RCD_STATE_EVENT: &str = "rcd://state";
 pub const TRANSFERS_EVENT: &str = "transfers://update";
+pub const JOBS_EVENT: &str = "jobs://update";
 
 /// Closes the splash and shows the main window.
 pub fn reveal_main_window(app: &AppHandle) {
@@ -32,10 +37,15 @@ pub fn reveal_main_window(app: &AppHandle) {
 
 /// Recomputes the tray state from rclone health and current activity.
 pub fn refresh_status(app: &AppHandle) {
-    let supervisor = app.state::<Supervisor>();
+    let (Some(supervisor), Some(queue), Some(runner)) = (
+        app.try_state::<Supervisor>(),
+        app.try_state::<Arc<TransferQueue>>(),
+        app.try_state::<Arc<Runner>>(),
+    ) else {
+        return;
+    };
     let state = supervisor.state();
-    let transfers = app.state::<Arc<TransferQueue>>().active();
-    tray::refresh(app, &state, status::overall(&state, transfers, 0));
+    tray::refresh(app, &state, status::overall(&state, queue.active(), runner.active()));
 }
 
 fn on_rcd_change(app: &AppHandle, state: &RcdState) {
@@ -77,6 +87,16 @@ pub fn run() {
                 refresh_status(&transfer_handle);
             });
             app.manage(queue);
+            let jobs_handle = app.handle().clone();
+            let runner = Runner::start(supervisor.clone(), &paths, move || {
+                if let Some(runner) = jobs_handle.try_state::<Arc<Runner>>() {
+                    let views: Vec<JobView> = runner.list();
+                    let _ = jobs_handle.emit(JOBS_EVENT, views);
+                }
+                refresh_status(&jobs_handle);
+            })?;
+            app.manage(runner);
+            app.manage(mounts::MountRegistry::default());
             app.manage(supervisor);
             app.manage(paths);
 
@@ -125,6 +145,19 @@ pub fn run() {
             files::commands::list_transfers,
             files::commands::cancel_transfer,
             files::commands::clear_finished_transfers,
+            jobs::commands::list_jobs,
+            jobs::commands::create_job,
+            jobs::commands::update_job,
+            jobs::commands::set_job_enabled,
+            jobs::commands::delete_job,
+            jobs::commands::run_job,
+            jobs::commands::cancel_job,
+            jobs::commands::read_job_log,
+            mounts::mount_support,
+            mounts::suggest_mount_location,
+            mounts::list_mounts,
+            mounts::mount_remote,
+            mounts::unmount_remote,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Orbit");
@@ -132,7 +165,12 @@ pub fn run() {
     app.run(|app_handle, event| {
         if let RunEvent::Exit = event {
             let supervisor = app_handle.state::<Supervisor>().inner().clone();
-            tauri::async_runtime::block_on(supervisor.shutdown());
+            tauri::async_runtime::block_on(async {
+                if let Ok(client) = supervisor.client() {
+                    mounts::unmount_all(&client).await;
+                }
+                supervisor.shutdown().await;
+            });
         }
     });
 }

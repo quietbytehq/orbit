@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, formatDuration, formatSpeed } from "./format";
+import { formatBytes, formatDuration, formatSpeed, timeAgo } from "./format";
 
 describe("formatBytes", () => {
   it("uses bytes below one kilobyte", () => {
@@ -45,5 +45,14 @@ describe("formatDuration", () => {
   it("hides unknown values", () => {
     expect(formatDuration(null)).toBe("");
     expect(formatDuration(-3)).toBe("");
+  });
+});
+
+describe("timeAgo", () => {
+  const now = 1_000_000;
+  it("describes recent times in plain words", () => {
+    expect(timeAgo(now - 10, now)).toBe("just now");
+    expect(timeAgo(now - 300, now)).toBe("5 min ago");
+    expect(timeAgo(now - 7200, now)).toBe("2 h ago");
   });
 });

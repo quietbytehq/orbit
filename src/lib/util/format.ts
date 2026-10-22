@@ -28,3 +28,12 @@ export function formatDuration(seconds: number | null): string {
   const rest = minutes % 60;
   return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
 }
+
+/** "just now", "5 min ago", "3 h ago", or a date for anything older than a day. Takes Unix seconds. */
+export function timeAgo(unixSeconds: number, now: number = Date.now() / 1000): string {
+  const elapsed = Math.max(0, now - unixSeconds);
+  if (elapsed < 60) return "just now";
+  if (elapsed < 3600) return `${Math.floor(elapsed / 60)} min ago`;
+  if (elapsed < 86_400) return `${Math.floor(elapsed / 3600)} h ago`;
+  return new Date(unixSeconds * 1000).toLocaleDateString(undefined, { dateStyle: "medium" });
+}
