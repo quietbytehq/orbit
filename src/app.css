@@ -27,7 +27,8 @@
   --text-secondary: #6e6e73;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06);
   --splash-ink: #1d1d1f;
-  --splash-bg: rgba(255, 255, 255, 0.86);
+  --splash-muted: rgba(29, 29, 31, 0.6);
+  --splash-bg: linear-gradient(160deg, #f7f9ff 0%, #e3ebfa 100%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -43,7 +44,8 @@
     --text-secondary: #98989f;
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
     --splash-ink: #f5f5f7;
-    --splash-bg: rgba(30, 30, 32, 0.86);
+    --splash-muted: rgba(245, 245, 247, 0.6);
+    --splash-bg: linear-gradient(160deg, #2a3a5c 0%, #0f1622 100%);
   }
 }
 
@@ -59,7 +61,8 @@
   --text-secondary: #98989f;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
   --splash-ink: #f5f5f7;
-  --splash-bg: rgba(30, 30, 32, 0.86);
+  --splash-muted: rgba(245, 245, 247, 0.6);
+  --splash-bg: linear-gradient(160deg, #2a3a5c 0%, #0f1622 100%);
 }
 
 *,

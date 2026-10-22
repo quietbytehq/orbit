@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "$lib/api";
+  import { PHASES, REDUCED_HOLD_MS, SPLASH_MS, phaseTiming } from "$lib/splash/timeline";
   import { applyTheme } from "$lib/util/theme";
 
   // Geometry matches assets/tray-icons-v2/gen.py so the splash echoes the app icon.
@@ -12,11 +13,15 @@
   const ORBIT_MS = 3200;
   const START_ANGLE = 200;
 
-  const FULL_MS = 1500;
-  const REDUCED_MS = 400;
-
   let satellite = $state({ x: 0, y: 0 });
+  let still = $state(false);
   let finished = false;
+
+  const [ringDelay, ringDuration] = phaseTiming("ring");
+  const [cloudDelay, cloudDuration] = phaseTiming("cloud");
+  const [wordDelay, wordDuration] = phaseTiming("wordmark");
+  const [taglineDelay, taglineDuration] = phaseTiming("tagline");
+  const [footerDelay, footerDuration] = phaseTiming("footer");
 
   function pointAt(angleDeg: number) {
     const t = (angleDeg * Math.PI) / 180;
@@ -41,11 +46,15 @@
 
   onMount(() => {
     void api.getSettings().then((settings) => applyTheme(settings.theme)).catch(() => {});
+
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const timer = window.setTimeout(finish, reduced ? REDUCED_MS : FULL_MS);
+    still = reduced;
+    const timer = window.setTimeout(finish, reduced ? REDUCED_HOLD_MS : SPLASH_MS);
 
     let frame = 0;
-    if (!reduced) {
+    if (reduced) {
+      satellite = pointAt(START_ANGLE);
+    } else {
       const started = performance.now();
       const tick = (now: number) => {
         const angle = START_ANGLE + ((now - started) / ORBIT_MS) * 360;
@@ -53,8 +62,6 @@
         frame = requestAnimationFrame(tick);
       };
       frame = requestAnimationFrame(tick);
-    } else {
-      satellite = pointAt(START_ANGLE);
     }
 
     return () => {
@@ -62,12 +69,6 @@
       cancelAnimationFrame(frame);
     };
   });
-
-  function onKey(event: KeyboardEvent) {
-    if (event.key === "Enter" || event.key === " " || event.key === "Escape") {
-      void finish();
-    }
-  }
 </script>
 
 <svelte:head>
@@ -79,7 +80,20 @@
   </style>
 </svelte:head>
 
-<div class="splash" role="button" tabindex="0" aria-label="Skip intro" onclick={finish} onkeydown={onKey}>
+<svelte:window onkeydown={() => void finish()} />
+
+<div
+  class="splash"
+  class:still
+  role="button"
+  tabindex="0"
+  aria-label="Skip intro"
+  onclick={finish}
+  onkeydown={(event) => {
+    event.preventDefault();
+    void finish();
+  }}
+>
   <svg viewBox="0 0 256 256" class="mark" aria-hidden="true">
     <ellipse
       class="ring"
@@ -89,8 +103,10 @@
       ry={RY}
       transform="rotate({ROT} {CX} {CY})"
       pathLength="1"
+      style:animation-delay="{ringDelay}ms"
+      style:animation-duration="{ringDuration}ms"
     />
-    <g class="cloud">
+    <g class="cloud" style:animation-delay="{cloudDelay}ms" style:animation-duration="{cloudDuration}ms">
       <circle cx="70" cy="146" r="30" />
       <circle cx="116" cy="112" r="44" />
       <circle cx="168" cy="124" r="36" />
@@ -99,7 +115,14 @@
     </g>
     <circle class="satellite" cx={satellite.x} cy={satellite.y} r="11" />
   </svg>
-  <p class="wordmark">Orbit</p>
+
+  <p class="wordmark" style:animation-delay="{wordDelay}ms" style:animation-duration="{wordDuration}ms">Orbit</p>
+  <p class="tagline" style:animation-delay="{taglineDelay}ms" style:animation-duration="{taglineDuration}ms">
+    All your clouds, in one orbit.
+  </p>
+  <p class="footer" style:animation-delay="{footerDelay}ms" style:animation-duration="{footerDuration}ms">
+    Powered by rclone · v0.1
+  </p>
 </div>
 
 <style>
@@ -107,25 +130,30 @@
   :global(body) {
     background: transparent;
   }
+  /* Smooth ease-out curves only. Nothing overshoots, so nothing bounces. */
+  :root {
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  }
   .splash {
+    position: relative;
     height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
     background: var(--splash-bg);
     border-radius: 28px;
     color: var(--splash-ink);
     cursor: pointer;
     user-select: none;
-    backdrop-filter: blur(30px) saturate(180%);
-    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    overflow: hidden;
   }
   .mark {
-    width: 220px;
-    height: 220px;
+    width: 180px;
+    height: 180px;
     overflow: visible;
+    margin-bottom: 4px;
   }
   .ring {
     fill: none;
@@ -134,27 +162,70 @@
     stroke-linecap: round;
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
-    animation: draw-ring 0.6s ease-out 0.05s forwards;
+    animation: draw-ring 1200ms var(--ease-out) forwards;
   }
   .satellite {
     fill: currentColor;
     opacity: 0;
-    animation: fade-in 0.3s ease-out 0.45s forwards;
+    animation: fade-in 400ms var(--ease-out) 200ms forwards;
   }
   .cloud {
     fill: currentColor;
     opacity: 0;
-    animation: fade-in 0.5s ease-out 0.9s forwards;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: cloud-in 600ms var(--ease-out) forwards;
   }
   .wordmark {
+    margin: 10px 0 0;
+    font-family: "SF Pro Display", var(--font-ui);
+    font-size: 34px;
+    font-weight: 300;
+    letter-spacing: 0.04em;
+    opacity: 0;
+    animation: rise 600ms var(--ease-out) forwards;
+  }
+  .tagline {
     margin: 0;
     font-family: var(--font-ui);
-    font-size: 18px;
-    font-weight: 600;
-    letter-spacing: 0.2px;
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0.01em;
     opacity: 0;
-    animation: fade-in 0.4s ease-out 1.1s forwards;
+    animation: rise 600ms var(--ease-out) forwards;
   }
+  .footer {
+    position: absolute;
+    bottom: 16px;
+    left: 0;
+    right: 0;
+    margin: 0;
+    text-align: center;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    color: var(--splash-muted);
+    opacity: 0;
+    animation: fade-in 500ms var(--ease-out) forwards;
+  }
+
+  /* Reduced motion: show the final frame at once. The timer in script still runs. */
+  .splash.still *,
+  .splash.still {
+    animation: none !important;
+    transition: none !important;
+  }
+  .splash.still .ring {
+    stroke-dashoffset: 0;
+  }
+  .splash.still .satellite,
+  .splash.still .cloud,
+  .splash.still .wordmark,
+  .splash.still .tagline,
+  .splash.still .footer {
+    opacity: 1;
+    transform: none;
+  }
+
   @keyframes draw-ring {
     to {
       stroke-dashoffset: 0;
@@ -163,6 +234,26 @@
   @keyframes fade-in {
     to {
       opacity: 1;
+    }
+  }
+  @keyframes cloud-in {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
     }
   }
 </style>
