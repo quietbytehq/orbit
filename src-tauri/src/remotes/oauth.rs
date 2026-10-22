@@ -86,5 +86,8 @@ async fn discard_stub(client: &RcClient, name: &str) {
 
 /// Stops a sign-in that is waiting for the browser. The pending create call then fails.
 pub async fn cancel(client: &RcClient) -> AppResult<()> {
-    client.call_value("config/oauthstop", &json!({})).await.map(|_| ())
+    client
+        .call_value("config/oauthstop", &json!({}))
+        .await
+        .map(|_| ())
 }

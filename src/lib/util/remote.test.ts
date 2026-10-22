@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isValidRemoteName, remoteBadge } from "./remote";
-import type { RemoteSummary } from "$lib/api/types";
+import { isValidRemoteName, remoteBadge, remotesInUse } from "./remote";
+import type { JobView, RemoteSummary, TransferItem } from "$lib/api/types";
 
 const base: RemoteSummary = {
   name: "Work",
@@ -9,6 +9,26 @@ const base: RemoteSummary = {
   providerTitle: "Google Drive",
   health: { state: "unknown" },
 };
+
+const noneInUse = new Set<string>();
+
+function transfer(overrides: Partial<TransferItem>): TransferItem {
+  return {
+    id: 1,
+    name: "a.txt",
+    direction: "upload",
+    isDir: false,
+    from: "/home/ana",
+    to: "Work:/",
+    remotes: ["Work"],
+    state: { state: "running" },
+    bytes: 0,
+    totalBytes: 0,
+    speed: 0,
+    etaSeconds: null,
+    ...overrides,
+  };
+}
 
 describe("isValidRemoteName", () => {
   it("accepts letters, digits, dashes and underscores", () => {
@@ -26,11 +46,37 @@ describe("isValidRemoteName", () => {
 
 describe("remoteBadge", () => {
   it("shows nothing until the remote has been checked", () => {
-    expect(remoteBadge(base)).toBeNull();
+    expect(remoteBadge(base, noneInUse)).toBeNull();
   });
 
   it("maps test results to badges", () => {
-    expect(remoteBadge({ ...base, health: { state: "ok" } })).toBe("synced");
-    expect(remoteBadge({ ...base, health: { state: "failed", message: "no" } })).toBe("disconnected");
+    expect(remoteBadge({ ...base, health: { state: "ok" } }, noneInUse)).toBe("synced");
+    expect(remoteBadge({ ...base, health: { state: "failed", message: "no" } }, noneInUse)).toBe("disconnected");
+  });
+
+  it("shows syncing while the remote is in use, even if its last check failed", () => {
+    expect(remoteBadge({ ...base, health: { state: "failed", message: "no" } }, new Set(["Work"]))).toBe("syncing");
+  });
+});
+
+describe("remotesInUse", () => {
+  const job: JobView = {
+    id: "j",
+    name: "Backup",
+    kind: "sync",
+    source: { kind: "local", path: "/home/ana" },
+    destination: { kind: "remote", remote: "Archive", path: "" },
+    enabled: true,
+    runs: [],
+    progress: { runId: "r", bytes: 0, totalBytes: 0, files: 0, errors: 0, speed: 0, etaSeconds: null, currentFile: null },
+  };
+
+  it("collects remotes from active transfers and running jobs", () => {
+    const names = remotesInUse([transfer({})], [job]);
+    expect([...names].sort()).toEqual(["Archive", "Work"]);
+  });
+
+  it("ignores finished transfers and idle jobs", () => {
+    expect(remotesInUse([transfer({ state: { state: "done" } })], [{ ...job, progress: null }]).size).toBe(0);
   });
 });

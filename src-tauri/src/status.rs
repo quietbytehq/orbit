@@ -40,7 +40,9 @@ mod tests {
     use super::*;
 
     fn healthy() -> RcdState {
-        RcdState::Healthy { version: "v1".into() }
+        RcdState::Healthy {
+            version: "v1".into(),
+        }
     }
 
     #[test]
@@ -59,10 +61,16 @@ mod tests {
         for state in [
             RcdState::Starting,
             RcdState::Restarting { attempt: 1 },
-            RcdState::Failed { message: "boom".into() },
+            RcdState::Failed {
+                message: "boom".into(),
+            },
             RcdState::Stopped,
         ] {
-            assert_eq!(overall(&state, 5, 5), OverallStatus::Disconnected, "{state:?}");
+            assert_eq!(
+                overall(&state, 5, 5),
+                OverallStatus::Disconnected,
+                "{state:?}"
+            );
         }
     }
 }

@@ -26,6 +26,9 @@ pub struct RcdSpec {
 pub struct RcdProcess {
     child: Child,
     endpoint: Endpoint,
+    /// On Windows, ties rcd's lifetime to Orbit's: the job closes with Orbit, and so does rcd.
+    #[cfg(windows)]
+    _job: job::KillOnClose,
 }
 
 #[derive(Deserialize)]
@@ -74,7 +77,14 @@ impl RcdProcess {
                 format!("Could not start rclone ({}): {err}", spec.binary.display()),
             )
         })?;
-        Ok(Self { child, endpoint })
+        #[cfg(windows)]
+        let job = job::KillOnClose::for_child(&child)?;
+        Ok(Self {
+            child,
+            endpoint,
+            #[cfg(windows)]
+            _job: job,
+        })
     }
 
     pub fn client(&self) -> RcClient {
@@ -147,6 +157,61 @@ fn ask_kernel_to_end_child_with_parent(command: &mut Command) {
 
 #[cfg(not(target_os = "linux"))]
 fn ask_kernel_to_end_child_with_parent(_command: &mut Command) {}
+
+#[cfg(windows)]
+mod job {
+    use std::io;
+    use std::mem::size_of;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
+        SetInformationJobObject,
+    };
+
+    /// A job object that kills its processes when the handle is closed.
+    pub struct KillOnClose(HANDLE);
+
+    impl KillOnClose {
+        pub fn for_child(child: &std::process::Child) -> io::Result<Self> {
+            // SAFETY: every call takes handles we own, and each failure path closes the job.
+            unsafe {
+                let job = CreateJobObjectW(std::ptr::null(), std::ptr::null());
+                if job.is_null() {
+                    return Err(io::Error::last_os_error());
+                }
+                let job = KillOnClose(job);
+
+                let mut limits: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
+                limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                let set = SetInformationJobObject(
+                    job.0,
+                    JobObjectExtendedLimitInformation,
+                    std::ptr::addr_of!(limits).cast(),
+                    size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+                );
+                if set == 0 {
+                    return Err(io::Error::last_os_error());
+                }
+
+                if AssignProcessToJobObject(job.0, child.as_raw_handle()) == 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                Ok(job)
+            }
+        }
+    }
+
+    impl Drop for KillOnClose {
+        fn drop(&mut self) {
+            // SAFETY: the handle came from CreateJobObjectW and is closed exactly once here.
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+}
 
 #[cfg(windows)]
 fn hide_console(command: &mut Command) {

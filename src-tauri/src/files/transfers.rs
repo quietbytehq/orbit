@@ -1,11 +1,11 @@
 //! Transfer queue. Each transfer runs as an async rclone job, and progress is read from the
 //! job's stats group. Up to `limit` transfers run at once; the rest wait in order.
 
-use super::{join, local_fs, remote_fs, Endpoint};
+use super::{Endpoint, join, local_fs, remote_fs};
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::rclone::Supervisor;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -61,6 +61,8 @@ pub struct Item {
     pub is_dir: bool,
     pub from: String,
     pub to: String,
+    /// Names of the remotes this transfer reads from or writes to.
+    pub remotes: Vec<String>,
     pub state: State,
     pub bytes: u64,
     pub total_bytes: u64,
@@ -81,13 +83,15 @@ pub fn direction(request: &TransferRequest) -> AppResult<Direction> {
         (Endpoint::Remote { .. }, Endpoint::Local { .. }, Mode::Copy) => Ok(Direction::Download),
         (Endpoint::Remote { .. }, Endpoint::Remote { .. }, Mode::Copy) => Ok(Direction::Copy),
         (Endpoint::Remote { .. }, Endpoint::Remote { .. }, Mode::Move) => Ok(Direction::Move),
-        (Endpoint::Local { .. }, _, Mode::Move) => Err(AppError::invalid("Files on this computer are uploaded, not moved.")),
-        (Endpoint::Remote { .. }, Endpoint::Local { .. }, Mode::Move) => {
-            Err(AppError::invalid("Downloads copy files. Delete the remote copy yourself if you want to move it."))
-        }
-        (Endpoint::Local { .. }, Endpoint::Local { .. }, _) => {
-            Err(AppError::invalid("Orbit copies between this computer and a remote, not within this computer."))
-        }
+        (Endpoint::Local { .. }, _, Mode::Move) => Err(AppError::invalid(
+            "Files on this computer are uploaded, not moved.",
+        )),
+        (Endpoint::Remote { .. }, Endpoint::Local { .. }, Mode::Move) => Err(AppError::invalid(
+            "Downloads copy files. Delete the remote copy yourself if you want to move it.",
+        )),
+        (Endpoint::Local { .. }, Endpoint::Local { .. }, _) => Err(AppError::invalid(
+            "Orbit copies between this computer and a remote, not within this computer.",
+        )),
     }
 }
 
@@ -110,7 +114,9 @@ pub fn build_call(request: &TransferRequest) -> AppResult<RcCall> {
     direction(request)?;
     let is_move = request.mode == Mode::Move;
     if request.name.trim().is_empty() || request.name.contains('/') || request.name.contains('\\') {
-        return Err(AppError::invalid("Choose a single file or folder to transfer."));
+        return Err(AppError::invalid(
+            "Choose a single file or folder to transfer.",
+        ));
     }
     if request.is_dir {
         let endpoint = if is_move { "sync/move" } else { "sync/copy" };
@@ -123,7 +129,11 @@ pub fn build_call(request: &TransferRequest) -> AppResult<RcCall> {
         }
         return Ok(RcCall { endpoint, body });
     }
-    let endpoint = if is_move { "operations/movefile" } else { "operations/copyfile" };
+    let endpoint = if is_move {
+        "operations/movefile"
+    } else {
+        "operations/copyfile"
+    };
     Ok(RcCall {
         endpoint,
         body: json!({
@@ -135,9 +145,24 @@ pub fn build_call(request: &TransferRequest) -> AppResult<RcCall> {
     })
 }
 
+/// Remote names an endpoint pair touches, without repeats.
+pub fn remotes_of(source: &Endpoint, destination: &Endpoint) -> Vec<String> {
+    let mut names: Vec<String> = [source, destination]
+        .iter()
+        .filter_map(|endpoint| match endpoint {
+            Endpoint::Remote { remote, .. } => Some(remote.clone()),
+            Endpoint::Local { .. } => None,
+        })
+        .collect();
+    names.dedup();
+    names
+}
+
 fn label(endpoint: &Endpoint) -> String {
     match endpoint {
-        Endpoint::Remote { remote, path } => format!("{remote}:/{path}").trim_end_matches('/').to_owned(),
+        Endpoint::Remote { remote, path } => {
+            format!("{remote}:/{path}").trim_end_matches('/').to_owned()
+        }
         Endpoint::Local { path } => path.clone(),
     }
 }
@@ -147,7 +172,7 @@ struct JobReply {
     jobid: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 #[serde(default)]
 struct JobStatus {
     finished: bool,
@@ -155,11 +180,6 @@ struct JobStatus {
     error: String,
 }
 
-impl Default for JobStatus {
-    fn default() -> Self {
-        Self { finished: false, success: false, error: String::new() }
-    }
-}
 
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -196,10 +216,18 @@ pub struct TransferQueue {
 
 impl TransferQueue {
     /// Starts the dispatcher on Tauri's async runtime.
-    pub fn start(supervisor: Supervisor, limit: usize, on_change: impl Fn(&[Item]) + Send + Sync + 'static) -> Arc<Self> {
+    pub fn start(
+        supervisor: Supervisor,
+        limit: usize,
+        on_change: impl Fn(&[Item]) + Send + Sync + 'static,
+    ) -> Arc<Self> {
         let queue = Arc::new(Self {
             supervisor,
-            inner: Mutex::new(Inner { next_id: 1, limit: limit.max(1), ..Inner::default() }),
+            inner: Mutex::new(Inner {
+                next_id: 1,
+                limit: limit.max(1),
+                ..Inner::default()
+            }),
             wake: Notify::new(),
             on_change: Arc::new(on_change),
         });
@@ -227,6 +255,7 @@ impl TransferQueue {
                         is_dir: request.is_dir,
                         from: label(&request.source),
                         to: label(&request.destination),
+                        remotes: remotes_of(&request.source, &request.destination),
                         state: State::Queued,
                         bytes: 0,
                         total_bytes: 0,
@@ -247,7 +276,13 @@ impl TransferQueue {
     }
 
     pub fn snapshot(&self) -> Vec<Item> {
-        self.inner.lock().expect("queue lock").entries.iter().map(|e| e.item.clone()).collect()
+        self.inner
+            .lock()
+            .expect("queue lock")
+            .entries
+            .iter()
+            .map(|e| e.item.clone())
+            .collect()
     }
 
     /// Transfers that are running now. Used for the tray's "syncing" state.
@@ -264,7 +299,10 @@ impl TransferQueue {
         let job_id = {
             let mut inner = self.inner.lock().expect("queue lock");
             let Some(entry) = inner.entries.iter_mut().find(|e| e.item.id == id) else {
-                return Err(AppError::new(ErrorKind::InvalidInput, "That transfer is no longer in the queue."));
+                return Err(AppError::new(
+                    ErrorKind::InvalidInput,
+                    "That transfer is no longer in the queue.",
+                ));
             };
             match entry.item.state {
                 State::Queued => {
@@ -280,7 +318,10 @@ impl TransferQueue {
         };
         self.emit();
         if let Some(job_id) = job_id {
-            self.supervisor.client()?.call_value("job/stop", &json!({ "jobid": job_id })).await?;
+            self.supervisor
+                .client()?
+                .call_value("job/stop", &json!({ "jobid": job_id }))
+                .await?;
         }
         Ok(())
     }
@@ -306,7 +347,10 @@ impl TransferQueue {
         if inner.running >= inner.limit {
             return None;
         }
-        let entry = inner.entries.iter_mut().find(|e| e.item.state == State::Queued)?;
+        let entry = inner
+            .entries
+            .iter_mut()
+            .find(|e| e.item.state == State::Queued)?;
         entry.item.state = State::Running;
         let claimed = (entry.item.id, entry.request.clone());
         inner.running += 1;
@@ -326,7 +370,9 @@ impl TransferQueue {
                         State::Done
                     }
                     Err(_) if entry.cancel_requested => State::Cancelled,
-                    Err(err) => State::Failed { message: err.message },
+                    Err(err) => State::Failed {
+                        message: err.message,
+                    },
                 };
                 entry.item.speed = 0.0;
                 entry.item.eta_seconds = None;
@@ -349,8 +395,13 @@ impl TransferQueue {
 
         loop {
             tokio::time::sleep(POLL_INTERVAL).await;
-            let status: JobStatus = client.call("job/status", &json!({ "jobid": reply.jobid })).await?;
-            let stats: Stats = client.call("core/stats", &json!({ "group": group })).await.unwrap_or_default();
+            let status: JobStatus = client
+                .call("job/status", &json!({ "jobid": reply.jobid }))
+                .await?;
+            let stats: Stats = client
+                .call("core/stats", &json!({ "group": group }))
+                .await
+                .unwrap_or_default();
             self.update(id, |entry| {
                 entry.item.bytes = stats.bytes;
                 entry.item.total_bytes = stats.total_bytes;
@@ -362,7 +413,11 @@ impl TransferQueue {
                 return if status.success {
                     Ok(())
                 } else {
-                    let message = if status.error.is_empty() { "The transfer failed.".to_owned() } else { status.error };
+                    let message = if status.error.is_empty() {
+                        "The transfer failed.".to_owned()
+                    } else {
+                        status.error
+                    };
                     Err(AppError::new(ErrorKind::Rclone, message))
                 };
             }
@@ -392,22 +447,49 @@ mod tests {
     use super::*;
 
     fn remote(name: &str, path: &str) -> Endpoint {
-        Endpoint::Remote { remote: name.into(), path: path.into() }
+        Endpoint::Remote {
+            remote: name.into(),
+            path: path.into(),
+        }
     }
 
     fn local(path: &str) -> Endpoint {
         Endpoint::Local { path: path.into() }
     }
 
-    fn request(source: Endpoint, destination: Endpoint, mode: Mode, name: &str, is_dir: bool) -> TransferRequest {
-        TransferRequest { source, destination, mode, name: name.into(), is_dir }
+    fn request(
+        source: Endpoint,
+        destination: Endpoint,
+        mode: Mode,
+        name: &str,
+        is_dir: bool,
+    ) -> TransferRequest {
+        TransferRequest {
+            source,
+            destination,
+            mode,
+            name: name.into(),
+            is_dir,
+        }
     }
 
     #[test]
     fn directions_follow_endpoints_and_mode() {
-        let up = request(local("/home/ana"), remote("work", "Photos"), Mode::Copy, "a.jpg", false);
+        let up = request(
+            local("/home/ana"),
+            remote("work", "Photos"),
+            Mode::Copy,
+            "a.jpg",
+            false,
+        );
         assert_eq!(direction(&up).unwrap(), Direction::Upload);
-        let down = request(remote("work", "Photos"), local("/home/ana"), Mode::Copy, "a.jpg", false);
+        let down = request(
+            remote("work", "Photos"),
+            local("/home/ana"),
+            Mode::Copy,
+            "a.jpg",
+            false,
+        );
         assert_eq!(direction(&down).unwrap(), Direction::Download);
         let copy = request(remote("a", ""), remote("b", ""), Mode::Copy, "x", false);
         assert_eq!(direction(&copy).unwrap(), Direction::Copy);
@@ -427,7 +509,14 @@ mod tests {
 
     #[test]
     fn file_upload_uses_copyfile_with_parent_folders() {
-        let call = build_call(&request(local("/home/ana/Pictures"), remote("work", "Photos/2024"), Mode::Copy, "cat.jpg", false)).unwrap();
+        let call = build_call(&request(
+            local("/home/ana/Pictures"),
+            remote("work", "Photos/2024"),
+            Mode::Copy,
+            "cat.jpg",
+            false,
+        ))
+        .unwrap();
         assert_eq!(call.endpoint, "operations/copyfile");
         assert_eq!(call.body["srcFs"], ":local:/home/ana/Pictures");
         assert_eq!(call.body["srcRemote"], "cat.jpg");
@@ -437,7 +526,14 @@ mod tests {
 
     #[test]
     fn folder_download_uses_sync_copy_on_full_paths() {
-        let call = build_call(&request(remote("work", "Photos"), local("/home/ana"), Mode::Copy, "2024", true)).unwrap();
+        let call = build_call(&request(
+            remote("work", "Photos"),
+            local("/home/ana"),
+            Mode::Copy,
+            "2024",
+            true,
+        ))
+        .unwrap();
         assert_eq!(call.endpoint, "sync/copy");
         assert_eq!(call.body["srcFs"], "work:Photos/2024");
         assert_eq!(call.body["dstFs"], ":local:/home/ana/2024");
@@ -446,7 +542,14 @@ mod tests {
 
     #[test]
     fn folder_move_removes_empty_source_folders() {
-        let call = build_call(&request(remote("a", "x"), remote("b", "y"), Mode::Move, "z", true)).unwrap();
+        let call = build_call(&request(
+            remote("a", "x"),
+            remote("b", "y"),
+            Mode::Move,
+            "z",
+            true,
+        ))
+        .unwrap();
         assert_eq!(call.endpoint, "sync/move");
         assert_eq!(call.body["srcFs"], "a:x/z");
         assert_eq!(call.body["dstFs"], "b:y/z");
@@ -459,6 +562,17 @@ mod tests {
         assert!(build_call(&bad).is_err());
         let empty = request(remote("a", ""), remote("b", ""), Mode::Copy, " ", false);
         assert!(build_call(&empty).is_err());
+    }
+
+    #[test]
+    fn lists_each_remote_once() {
+        assert_eq!(
+            remotes_of(&remote("a", ""), &remote("b", "x")),
+            vec!["a", "b"]
+        );
+        assert_eq!(remotes_of(&remote("a", ""), &remote("a", "x")), vec!["a"]);
+        assert_eq!(remotes_of(&local("/x"), &remote("a", "")), vec!["a"]);
+        assert!(remotes_of(&local("/x"), &local("/y")).is_empty());
     }
 
     #[test]

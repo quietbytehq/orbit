@@ -41,7 +41,10 @@ mod tests {
             name: "Backup".into(),
             kind: JobKind::Sync,
             source: Endpoint::Local { path: "/a".into() },
-            destination: Endpoint::Remote { remote: "w".into(), path: "b".into() },
+            destination: Endpoint::Remote {
+                remote: "w".into(),
+                path: "b".into(),
+            },
             enabled: false,
             runs: vec![],
         }];

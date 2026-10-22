@@ -2,6 +2,7 @@ use crate::error::{AppError, AppResult};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 /// User preferences. Holds no credentials.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -68,6 +69,23 @@ impl Settings {
             )));
         }
         Ok(())
+    }
+}
+
+/// The settings in use, shared with commands and the rest of the app.
+pub struct SettingsStore(pub Mutex<Settings>);
+
+impl SettingsStore {
+    pub fn new(settings: Settings) -> Self {
+        Self(Mutex::new(settings))
+    }
+
+    pub fn get(&self) -> Settings {
+        self.0.lock().expect("settings lock").clone()
+    }
+
+    pub fn set(&self, settings: Settings) {
+        *self.0.lock().expect("settings lock") = settings;
     }
 }
 

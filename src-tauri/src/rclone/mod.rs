@@ -3,12 +3,11 @@ pub mod process;
 pub mod resolve;
 pub mod supervisor;
 
-use crate::paths::{exe_dir, AppPaths};
+use crate::paths::{AppPaths, exe_dir};
 use crate::settings::Settings;
 
-
-pub use process::RcdSpec;
 pub use client::RcClient;
+pub use process::RcdSpec;
 pub use supervisor::{RcdState, Supervisor};
 
 /// Builds the spec for `rclone rcd` from the app paths and current settings.
@@ -23,11 +22,7 @@ pub fn spec_for(paths: &AppPaths, settings: &Settings) -> RcdSpec {
         exe_dir.as_deref(),
         path_env.as_deref(),
     )
-    .unwrap_or_else(|_| {
-        exe_dir
-            .unwrap_or_default()
-            .join(resolve::binary_name())
-    });
+    .unwrap_or_else(|_| exe_dir.unwrap_or_default().join(resolve::binary_name()));
     RcdSpec {
         binary,
         config_path: paths.rclone_config(),

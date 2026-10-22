@@ -102,10 +102,14 @@ pub fn validate(input: &JobInput) -> crate::error::AppResult<String> {
         return Err(AppError::invalid("Job names can be up to 60 characters."));
     }
     if let (Endpoint::Local { .. }, Endpoint::Local { .. }) = (&input.source, &input.destination) {
-        return Err(AppError::invalid("A job needs a remote on one side. Orbit does not sync within this computer."));
+        return Err(AppError::invalid(
+            "A job needs a remote on one side. Orbit does not sync within this computer.",
+        ));
     }
     if input.source == input.destination {
-        return Err(AppError::invalid("The source and destination must be different folders."));
+        return Err(AppError::invalid(
+            "The source and destination must be different folders.",
+        ));
     }
     Ok(name.to_owned())
 }
@@ -124,12 +128,20 @@ mod tests {
     }
 
     fn remote(name: &str, path: &str) -> Endpoint {
-        Endpoint::Remote { remote: name.into(), path: path.into() }
+        Endpoint::Remote {
+            remote: name.into(),
+            path: path.into(),
+        }
     }
 
     #[test]
     fn accepts_remote_and_local_and_trims_name() {
-        let job = input(remote("work", "Photos"), Endpoint::Local { path: "/home/ana/Photos".into() });
+        let job = input(
+            remote("work", "Photos"),
+            Endpoint::Local {
+                path: "/home/ana/Photos".into(),
+            },
+        );
         assert_eq!(validate(&job).unwrap(), "Photos");
     }
 
@@ -144,7 +156,10 @@ mod tests {
         assert!(validate(&long).is_err());
 
         assert!(validate(&input(remote("a", "x"), remote("a", "x"))).is_err());
-        let local_only = input(Endpoint::Local { path: "/a".into() }, Endpoint::Local { path: "/b".into() });
+        let local_only = input(
+            Endpoint::Local { path: "/a".into() },
+            Endpoint::Local { path: "/b".into() },
+        );
         assert!(validate(&local_only).is_err());
     }
 

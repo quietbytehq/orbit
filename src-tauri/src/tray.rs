@@ -50,18 +50,20 @@ pub fn icon_state(rcd: &RcdState, status: OverallStatus) -> IconState {
 
 /// Size used for the tray. Windows scales from 32 px; the Linux appindicator expects 24 px.
 fn tray_size() -> u32 {
-    if cfg!(windows) {
-        32
-    } else {
-        24
-    }
+    if cfg!(windows) { 32 } else { 24 }
 }
 
 /// Returns PNG bytes for the given variant, state and tray size.
 pub fn icon_bytes(variant: Variant, state: IconState, size: u32) -> &'static [u8] {
     macro_rules! tray_png {
         ($size:literal, $name:literal) => {
-            include_bytes!(concat!("../../assets/tray-icons-v2/", $size, "/", $name, ".png"))
+            include_bytes!(concat!(
+                "../../assets/tray-icons-v2/",
+                $size,
+                "/",
+                $name,
+                ".png"
+            ))
         };
     }
     match (size, variant, state) {
@@ -81,6 +83,42 @@ pub fn icon_bytes(variant: Variant, state: IconState, size: u32) -> &'static [u8
         (_, Variant::Dark, IconState::Synced) => tray_png!("32", "dark-synced"),
         (_, Variant::Dark, IconState::Syncing) => tray_png!("32", "dark-syncing"),
         (_, Variant::Dark, IconState::Disconnected) => tray_png!("32", "dark-disconnected"),
+    }
+}
+
+/// The icon for a variant and state, in the form the platform's tray expects:
+/// a multi-size `.ico` on Windows and a PNG elsewhere.
+fn tray_image(variant: Variant, state: IconState) -> tauri::Result<Image<'static>> {
+    Image::from_bytes(icon_file(variant, state))
+}
+
+#[cfg(windows)]
+fn icon_file(variant: Variant, state: IconState) -> &'static [u8] {
+    ico_bytes(variant, state)
+}
+
+#[cfg(not(windows))]
+fn icon_file(variant: Variant, state: IconState) -> &'static [u8] {
+    icon_bytes(variant, state, tray_size())
+}
+
+/// Returns the multi-size `.ico` for a variant and state. Windows picks the frame that fits the DPI.
+#[cfg(windows)]
+pub fn ico_bytes(variant: Variant, state: IconState) -> &'static [u8] {
+    macro_rules! tray_ico {
+        ($name:literal) => {
+            include_bytes!(concat!("../../assets/tray-icons-v2/ico/", $name, ".ico"))
+        };
+    }
+    match (variant, state) {
+        (Variant::White, IconState::Base) => tray_ico!("white-base"),
+        (Variant::White, IconState::Synced) => tray_ico!("white-synced"),
+        (Variant::White, IconState::Syncing) => tray_ico!("white-syncing"),
+        (Variant::White, IconState::Disconnected) => tray_ico!("white-disconnected"),
+        (Variant::Dark, IconState::Base) => tray_ico!("dark-base"),
+        (Variant::Dark, IconState::Synced) => tray_ico!("dark-synced"),
+        (Variant::Dark, IconState::Syncing) => tray_ico!("dark-syncing"),
+        (Variant::Dark, IconState::Disconnected) => tray_ico!("dark-disconnected"),
     }
 }
 
@@ -109,7 +147,7 @@ pub fn install(app: &AppHandle, variant: Variant) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&status_item, &separator, &show, &quit])?;
 
     let icon = TrayIconBuilder::with_id(TRAY_ID)
-        .icon(Image::from_bytes(icon_bytes(variant, IconState::Base, tray_size()))?)
+        .icon(tray_image(variant, IconState::Base)?)
         .tooltip("Orbit for rclone")
         .menu(&menu)
         .show_menu_on_left_click(false)
@@ -147,12 +185,14 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>, rcd: &RcdState, overall: OverallS
     }
     let _ = tray
         .icon
-        .set_icon(Some(Image::from_bytes(icon_bytes(tray.variant, state, tray_size())).expect("bundled tray png is valid")));
+        .set_icon(Some(tray_image(tray.variant, state).expect("bundled tray icon is valid")));
     let description = match rcd {
         RcdState::Starting | RcdState::Stopped => "Starting rclone…".to_owned(),
         _ => status::describe(overall).to_owned(),
     };
-    let _ = tray.icon.set_tooltip(Some(format!("Orbit for rclone: {description}")));
+    let _ = tray
+        .icon
+        .set_tooltip(Some(format!("Orbit for rclone: {description}")));
     let _ = tray.status_item.set_text(description);
     tray.current = Some((state, overall));
 }
@@ -170,7 +210,7 @@ pub fn set_theme<R: Runtime>(app: &AppHandle<R>, theme: Theme) {
     if let Some((state, _)) = tray.current {
         let _ = tray
             .icon
-            .set_icon(Some(Image::from_bytes(icon_bytes(variant, state, tray_size())).expect("bundled tray png is valid")));
+            .set_icon(Some(tray_image(variant, state).expect("bundled tray icon is valid")));
     }
 }
 
@@ -195,17 +235,33 @@ mod tests {
     #[test]
     fn starting_and_stopped_use_base_mark() {
         for rcd in [RcdState::Starting, RcdState::Stopped] {
-            assert_eq!(icon_state(&rcd, OverallStatus::Disconnected), IconState::Base);
+            assert_eq!(
+                icon_state(&rcd, OverallStatus::Disconnected),
+                IconState::Base
+            );
         }
     }
 
     #[test]
     fn healthy_states_map_to_status_icons() {
-        let healthy = RcdState::Healthy { version: "v1".into() };
-        assert_eq!(icon_state(&healthy, OverallStatus::Synced), IconState::Synced);
-        assert_eq!(icon_state(&healthy, OverallStatus::Syncing), IconState::Syncing);
+        let healthy = RcdState::Healthy {
+            version: "v1".into(),
+        };
         assert_eq!(
-            icon_state(&RcdState::Failed { message: String::new() }, OverallStatus::Disconnected),
+            icon_state(&healthy, OverallStatus::Synced),
+            IconState::Synced
+        );
+        assert_eq!(
+            icon_state(&healthy, OverallStatus::Syncing),
+            IconState::Syncing
+        );
+        assert_eq!(
+            icon_state(
+                &RcdState::Failed {
+                    message: String::new()
+                },
+                OverallStatus::Disconnected
+            ),
             IconState::Disconnected
         );
     }
@@ -213,7 +269,12 @@ mod tests {
     #[test]
     fn every_variant_and_state_has_bundled_png() {
         for variant in [Variant::White, Variant::Dark] {
-            for state in [IconState::Base, IconState::Synced, IconState::Syncing, IconState::Disconnected] {
+            for state in [
+                IconState::Base,
+                IconState::Synced,
+                IconState::Syncing,
+                IconState::Disconnected,
+            ] {
                 for size in [24, 32] {
                     let bytes = icon_bytes(variant, state, size);
                     assert_eq!(&bytes[1..4], b"PNG", "{variant:?} {state:?} {size}");

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "$lib/api";
+  import { applyTheme } from "$lib/util/theme";
 
   // Geometry matches assets/tray-icons-v2/gen.py so the splash echoes the app icon.
   const CX = 128;
@@ -39,6 +40,7 @@
   }
 
   onMount(() => {
+    void api.getSettings().then((settings) => applyTheme(settings.theme)).catch(() => {});
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const timer = window.setTimeout(finish, reduced ? REDUCED_MS : FULL_MS);
 

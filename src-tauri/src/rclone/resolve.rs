@@ -26,7 +26,10 @@ pub fn resolve_binary(
         } else {
             Err(AppError::new(
                 ErrorKind::InvalidInput,
-                format!("The rclone path in settings does not exist: {}", path.display()),
+                format!(
+                    "The rclone path in settings does not exist: {}",
+                    path.display()
+                ),
             ))
         };
     }
@@ -38,13 +41,12 @@ pub fn resolve_binary(
         }
     }
 
-    if let Some(path_env) = path_env {
-        if let Some(found) = std::env::split_paths(path_env)
+    if let Some(path_env) = path_env
+        && let Some(found) = std::env::split_paths(path_env)
             .map(|dir| dir.join(binary_name()))
             .find(|candidate| candidate.is_file())
-        {
-            return Ok(found);
-        }
+    {
+        return Ok(found);
     }
 
     Err(AppError::new(

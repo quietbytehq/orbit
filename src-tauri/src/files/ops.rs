@@ -1,6 +1,6 @@
 //! Browse and change files inside remotes, using rclone's operations API.
 
-use super::{join, normalize, remote_fs, split, FileEntry};
+use super::{FileEntry, join, normalize, remote_fs, split};
 use crate::error::AppResult;
 use crate::rclone::RcClient;
 use serde::Deserialize;
@@ -58,29 +58,51 @@ pub async fn list(client: &RcClient, remote: &str, path: &str) -> AppResult<Vec<
 
 pub async fn create_folder(client: &RcClient, remote: &str, path: &str) -> AppResult<()> {
     client
-        .call_value("operations/mkdir", &json!({ "fs": remote_fs(remote, ""), "remote": normalize(path) }))
+        .call_value(
+            "operations/mkdir",
+            &json!({ "fs": remote_fs(remote, ""), "remote": normalize(path) }),
+        )
         .await
         .map(|_| ())
 }
 
 /// Permanently deletes a file, or a folder and everything in it.
 pub async fn delete(client: &RcClient, remote: &str, path: &str, is_dir: bool) -> AppResult<()> {
-    let endpoint = if is_dir { "operations/purge" } else { "operations/deletefile" };
+    let endpoint = if is_dir {
+        "operations/purge"
+    } else {
+        "operations/deletefile"
+    };
     client
-        .call_value(endpoint, &json!({ "fs": remote_fs(remote, ""), "remote": normalize(path) }))
+        .call_value(
+            endpoint,
+            &json!({ "fs": remote_fs(remote, ""), "remote": normalize(path) }),
+        )
         .await
         .map(|_| ())
 }
 
 /// Renames inside the same remote. `new_name` is a single path segment.
-pub async fn rename(client: &RcClient, remote: &str, path: &str, is_dir: bool, new_name: &str) -> AppResult<String> {
+pub async fn rename(
+    client: &RcClient,
+    remote: &str,
+    path: &str,
+    is_dir: bool,
+    new_name: &str,
+) -> AppResult<String> {
     let (parent, _) = split(path);
     let target = join(&parent, new_name);
     move_within(client, remote, path, &target, is_dir).await?;
     Ok(target)
 }
 
-async fn move_within(client: &RcClient, remote: &str, from: &str, to: &str, is_dir: bool) -> AppResult<()> {
+async fn move_within(
+    client: &RcClient,
+    remote: &str,
+    from: &str,
+    to: &str,
+    is_dir: bool,
+) -> AppResult<()> {
     let body = if is_dir {
         json!({
             "srcFs": remote_fs(remote, from),
@@ -97,7 +119,11 @@ async fn move_within(client: &RcClient, remote: &str, from: &str, to: &str, is_d
             "dstRemote": dst_name,
         })
     };
-    let endpoint = if is_dir { "sync/move" } else { "operations/movefile" };
+    let endpoint = if is_dir {
+        "sync/move"
+    } else {
+        "operations/movefile"
+    };
     client.call_value(endpoint, &body).await.map(|_| ())
 }
 

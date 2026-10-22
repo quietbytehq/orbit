@@ -145,9 +145,7 @@ async fn run(mut rx: mpsc::UnboundedReceiver<Command>, shared: Arc<Shared>, mut 
 
         failures += 1;
         if failures > MAX_RESTARTS {
-            shared.set_state(RcdState::Failed {
-                message: reason,
-            });
+            shared.set_state(RcdState::Failed { message: reason });
             // Stay idle until the user asks for a restart or the app quits.
             match wait_while_failed(&mut rx).await {
                 Some(next) => {
@@ -244,15 +242,13 @@ async fn monitor(process: &mut RcdProcess, rx: &mut mpsc::UnboundedReceiver<Comm
 
 /// While failed, only a restart request or a stop request is meaningful.
 async fn wait_while_failed(rx: &mut mpsc::UnboundedReceiver<Command>) -> Option<RcdSpec> {
-    loop {
-        match rx.recv().await {
-            Some(Command::Restart(next)) => return Some(next),
-            Some(Command::Stop(done)) => {
-                let _ = done.send(());
-                return None;
-            }
-            None => return None,
+    match rx.recv().await {
+        Some(Command::Restart(next)) => Some(next),
+        Some(Command::Stop(done)) => {
+            let _ = done.send(());
+            None
         }
+        None => None,
     }
 }
 
@@ -276,7 +272,10 @@ mod tests {
 
     #[test]
     fn state_serializes_with_tag() {
-        let json = serde_json::to_value(RcdState::Healthy { version: "v1.75.1".into() }).unwrap();
+        let json = serde_json::to_value(RcdState::Healthy {
+            version: "v1.75.1".into(),
+        })
+        .unwrap();
         assert_eq!(json["state"], "healthy");
         assert_eq!(json["version"], "v1.75.1");
     }

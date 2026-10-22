@@ -25,7 +25,11 @@ use orbit_lib::rclone::{RcdState, Supervisor};
 use serde_json::json;
 use std::time::{Duration, Instant};
 
-async fn wait_for<F: Fn(&RcdState) -> bool>(supervisor: &Supervisor, timeout: Duration, pred: F) -> RcdState {
+async fn wait_for<F: Fn(&RcdState) -> bool>(
+    supervisor: &Supervisor,
+    timeout: Duration,
+    pred: F,
+) -> RcdState {
     let deadline = Instant::now() + timeout;
     loop {
         let state = supervisor.state();
@@ -86,14 +90,19 @@ async fn supervisor_restarts_with_new_spec() {
     let binary = require_rclone!();
     let dir = tempfile::tempdir().unwrap();
     let supervisor = Supervisor::start(spec(binary.clone(), dir.path()), |_| {});
-    assert!(is_healthy(&wait_for(&supervisor, Duration::from_secs(30), is_healthy).await));
+    assert!(is_healthy(
+        &wait_for(&supervisor, Duration::from_secs(30), is_healthy).await
+    ));
 
     supervisor.restart(spec(binary, dir.path()));
 
     // Give the supervisor a moment to leave the healthy state, then wait for it to return.
     tokio::time::sleep(Duration::from_millis(300)).await;
     let state = wait_for(&supervisor, Duration::from_secs(30), is_healthy).await;
-    assert!(is_healthy(&state), "expected healthy after restart, got {state:?}");
+    assert!(
+        is_healthy(&state),
+        "expected healthy after restart, got {state:?}"
+    );
 
     supervisor.shutdown().await;
 }
@@ -105,14 +114,14 @@ async fn supervisor_gives_up_after_retry_budget() {
     let supervisor = Supervisor::start(spec(missing, dir.path()), |_| {});
 
     // Backoff is 1 s + 2 s + 4 s between attempts, so allow a generous window.
-    let state = wait_for(
-        &supervisor,
-        Duration::from_secs(30),
-        |s| matches!(s, RcdState::Failed { .. }),
-    )
+    let state = wait_for(&supervisor, Duration::from_secs(30), |s| {
+        matches!(s, RcdState::Failed { .. })
+    })
     .await;
     match state {
-        RcdState::Failed { message } => assert!(message.contains("Could not start rclone"), "{message}"),
+        RcdState::Failed { message } => {
+            assert!(message.contains("Could not start rclone"), "{message}")
+        }
         other => panic!("expected Failed, got {other:?}"),
     }
 

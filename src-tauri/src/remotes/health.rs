@@ -27,7 +27,10 @@ impl HealthStore {
     }
 
     pub fn set(&self, name: &str, health: RemoteHealth) {
-        self.entries.lock().expect("health lock").insert(name.to_owned(), health);
+        self.entries
+            .lock()
+            .expect("health lock")
+            .insert(name.to_owned(), health);
     }
 
     pub fn forget(&self, name: &str) {
@@ -57,7 +60,12 @@ mod tests {
     #[test]
     fn rename_moves_entry() {
         let store = HealthStore::default();
-        store.set("old", RemoteHealth::Failed { message: "x".into() });
+        store.set(
+            "old",
+            RemoteHealth::Failed {
+                message: "x".into(),
+            },
+        );
         store.rename("old", "new");
         assert_eq!(store.get("old"), RemoteHealth::Unknown);
         assert!(matches!(store.get("new"), RemoteHealth::Failed { .. }));

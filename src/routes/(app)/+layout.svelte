@@ -3,6 +3,7 @@
   import { onMount } from "svelte";
   import { rcd } from "$lib/stores/rcd.svelte";
   import { transfers } from "$lib/stores/transfers.svelte";
+  import { settings } from "$lib/stores/settings.svelte";
   import TransferPanel from "$lib/components/TransferPanel.svelte";
 
   let { children } = $props();
@@ -10,6 +11,7 @@
   onMount(() => {
     void rcd.start();
     void transfers.start();
+    void settings.load();
   });
 
   function isCurrent(href: string): boolean {
@@ -22,6 +24,7 @@
     { href: "/remotes", label: "Remotes" },
     { href: "/sync", label: "Sync" },
     { href: "/mounts", label: "Mounts" },
+    { href: "/settings", label: "Settings" },
   ];
 </script>
 

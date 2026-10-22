@@ -8,7 +8,9 @@ pub struct AppPaths {
 
 impl AppPaths {
     pub fn new(data_dir: impl Into<PathBuf>) -> Self {
-        Self { data_dir: data_dir.into() }
+        Self {
+            data_dir: data_dir.into(),
+        }
     }
 
     /// rclone's own config. This is the only place credentials are stored.
@@ -39,7 +41,10 @@ impl AppPaths {
 
 /// Directory that holds the Orbit executable, used to find the bundled rclone.
 pub fn exe_dir() -> Option<PathBuf> {
-    std::env::current_exe().ok()?.parent().map(Path::to_path_buf)
+    std::env::current_exe()
+        .ok()?
+        .parent()
+        .map(Path::to_path_buf)
 }
 
 #[cfg(test)]
@@ -49,7 +54,13 @@ mod tests {
     #[test]
     fn layout_is_under_data_dir() {
         let paths = AppPaths::new("/data/orbit");
-        assert_eq!(paths.rclone_config(), PathBuf::from("/data/orbit/rclone.conf"));
-        assert_eq!(paths.rclone_log(), PathBuf::from("/data/orbit/logs/rclone.log"));
+        assert_eq!(
+            paths.rclone_config(),
+            PathBuf::from("/data/orbit/rclone.conf")
+        );
+        assert_eq!(
+            paths.rclone_log(),
+            PathBuf::from("/data/orbit/logs/rclone.log")
+        );
     }
 }

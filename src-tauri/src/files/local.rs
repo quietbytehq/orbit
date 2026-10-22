@@ -51,7 +51,11 @@ mod tests {
         let folder = dir.path().join("docs");
         fs::create_dir(&folder).unwrap();
 
-        let entries = inspect(&[file.to_string_lossy().into_owned(), folder.to_string_lossy().into_owned()]).unwrap();
+        let entries = inspect(&[
+            file.to_string_lossy().into_owned(),
+            folder.to_string_lossy().into_owned(),
+        ])
+        .unwrap();
         assert_eq!(entries[0].name, "a.txt");
         assert!(!entries[0].is_dir);
         assert_eq!(entries[1].name, "docs");

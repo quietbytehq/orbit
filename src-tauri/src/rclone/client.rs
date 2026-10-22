@@ -1,6 +1,6 @@
 use crate::error::{AppError, AppResult, ErrorKind};
 use serde::de::DeserializeOwned;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::time::Duration;
 
 /// Default time limit for an RC call. Long-running work uses `_async` and polls `job/status`.
@@ -48,7 +48,8 @@ impl RcClient {
 
     /// Calls an RC endpoint and returns the raw JSON response.
     pub async fn call_value(&self, endpoint: &str, params: &Value) -> AppResult<Value> {
-        self.call_value_with_timeout(endpoint, params, DEFAULT_TIMEOUT).await
+        self.call_value_with_timeout(endpoint, params, DEFAULT_TIMEOUT)
+            .await
     }
 
     pub async fn call_value_with_timeout(
@@ -76,7 +77,10 @@ impl RcClient {
             serde_json::from_str(&body).map_err(|_| {
                 AppError::new(
                     ErrorKind::Rclone,
-                    format!("rclone returned an unreadable answer to {endpoint} (HTTP {})", status.as_u16()),
+                    format!(
+                        "rclone returned an unreadable answer to {endpoint} (HTTP {})",
+                        status.as_u16()
+                    ),
                 )
             })?
         };
@@ -90,7 +94,9 @@ impl RcClient {
                     .get("error")
                     .and_then(Value::as_str)
                     .map(str::to_owned)
-                    .unwrap_or_else(|| format!("rclone failed on {endpoint} (HTTP {})", status.as_u16())),
+                    .unwrap_or_else(|| {
+                        format!("rclone failed on {endpoint} (HTTP {})", status.as_u16())
+                    }),
             ))
         }
     }
@@ -104,7 +110,10 @@ impl RcClient {
 
 fn transport_error(err: reqwest::Error) -> AppError {
     if err.is_connect() || err.is_timeout() {
-        AppError::new(ErrorKind::NotRunning, "Orbit cannot reach rclone right now.")
+        AppError::new(
+            ErrorKind::NotRunning,
+            "Orbit cannot reach rclone right now.",
+        )
     } else {
         AppError::new(ErrorKind::Rclone, format!("rclone request failed: {err}"))
     }
@@ -139,7 +148,10 @@ mod tests {
             user: "orbit".into(),
             pass: "x".into(),
         });
-        let err = client.call_value("core/version", &json!({})).await.unwrap_err();
+        let err = client
+            .call_value("core/version", &json!({}))
+            .await
+            .unwrap_err();
         assert_eq!(err.kind, ErrorKind::NotRunning);
     }
 }

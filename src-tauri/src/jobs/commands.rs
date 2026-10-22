@@ -15,7 +15,11 @@ pub fn create_job(input: JobInput, runner: State<'_, Arc<Runner>>) -> AppResult<
 }
 
 #[tauri::command]
-pub fn update_job(id: String, input: JobInput, runner: State<'_, Arc<Runner>>) -> AppResult<JobView> {
+pub fn update_job(
+    id: String,
+    input: JobInput,
+    runner: State<'_, Arc<Runner>>,
+) -> AppResult<JobView> {
     runner.update(&id, input)
 }
 
@@ -40,6 +44,10 @@ pub async fn cancel_job(id: String, runner: State<'_, Arc<Runner>>) -> AppResult
 }
 
 #[tauri::command]
-pub fn read_job_log(job_id: String, run_id: String, runner: State<'_, Arc<Runner>>) -> AppResult<String> {
+pub fn read_job_log(
+    job_id: String,
+    run_id: String,
+    runner: State<'_, Arc<Runner>>,
+) -> AppResult<String> {
     runner.read_log(&job_id, &run_id)
 }

@@ -131,6 +131,7 @@ export interface TransferItem {
   isDir: boolean;
   from: string;
   to: string;
+  remotes: string[];
   state: TransferState;
   bytes: number;
   totalBytes: number;
@@ -225,4 +226,19 @@ export interface MountSupport {
   available: boolean;
   winfsp: WinFspStatus;
   requirement: string | null;
+}
+
+/** Mirrors `settings::Theme`. */
+export type Theme = "system" | "light" | "dark";
+
+/** Mirrors `settings::LogLevel`. */
+export type RcloneLogLevel = "ERROR" | "NOTICE" | "INFO" | "DEBUG";
+
+/** Mirrors `settings::Settings`. Holds no credentials. */
+export interface Settings {
+  theme: Theme;
+  transferConcurrency: number;
+  rclonePath: string | null;
+  rcloneLogLevel: RcloneLogLevel;
+  splashEnabled: boolean;
 }

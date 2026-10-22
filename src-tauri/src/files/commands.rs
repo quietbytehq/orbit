@@ -1,7 +1,7 @@
+use super::FileEntry;
 use super::local::{self, LocalEntry};
 use super::ops;
 use super::transfers::{Item, TransferQueue, TransferRequest};
-use super::FileEntry;
 use crate::error::AppResult;
 use crate::rclone::Supervisor;
 use serde::Deserialize;
@@ -21,18 +21,30 @@ pub fn inspect_local_paths(paths: Vec<String>) -> AppResult<Vec<LocalEntry>> {
 }
 
 #[tauri::command]
-pub async fn list_files(remote: String, path: String, supervisor: State<'_, Supervisor>) -> AppResult<Vec<FileEntry>> {
+pub async fn list_files(
+    remote: String,
+    path: String,
+    supervisor: State<'_, Supervisor>,
+) -> AppResult<Vec<FileEntry>> {
     ops::list(&supervisor.client()?, &remote, &path).await
 }
 
 #[tauri::command]
-pub async fn create_folder(remote: String, path: String, supervisor: State<'_, Supervisor>) -> AppResult<()> {
+pub async fn create_folder(
+    remote: String,
+    path: String,
+    supervisor: State<'_, Supervisor>,
+) -> AppResult<()> {
     ops::create_folder(&supervisor.client()?, &remote, &path).await
 }
 
 /// Deletes each item in turn and stops at the first failure, so the user sees what went wrong.
 #[tauri::command]
-pub async fn delete_items(remote: String, items: Vec<ItemRef>, supervisor: State<'_, Supervisor>) -> AppResult<()> {
+pub async fn delete_items(
+    remote: String,
+    items: Vec<ItemRef>,
+    supervisor: State<'_, Supervisor>,
+) -> AppResult<()> {
     let client = supervisor.client()?;
     for item in items {
         ops::delete(&client, &remote, &item.path, item.is_dir).await?;
@@ -48,11 +60,21 @@ pub async fn rename_item(
     new_name: String,
     supervisor: State<'_, Supervisor>,
 ) -> AppResult<String> {
-    ops::rename(&supervisor.client()?, &remote, &path, is_dir, new_name.trim()).await
+    ops::rename(
+        &supervisor.client()?,
+        &remote,
+        &path,
+        is_dir,
+        new_name.trim(),
+    )
+    .await
 }
 
 #[tauri::command]
-pub fn enqueue_transfers(requests: Vec<TransferRequest>, queue: State<'_, Arc<TransferQueue>>) -> AppResult<Vec<u64>> {
+pub fn enqueue_transfers(
+    requests: Vec<TransferRequest>,
+    queue: State<'_, Arc<TransferQueue>>,
+) -> AppResult<Vec<u64>> {
     queue.enqueue(requests)
 }
 

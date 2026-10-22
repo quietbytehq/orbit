@@ -2,7 +2,7 @@
 //! a per-run log file. Finished runs are kept in `jobs.json`, up to `HISTORY_LIMIT` per job.
 
 use super::store;
-use super::{validate, Job, JobInput, JobView, Progress, RunOutcome, RunRecord, HISTORY_LIMIT};
+use super::{HISTORY_LIMIT, Job, JobInput, JobView, Progress, RunOutcome, RunRecord, validate};
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::files::endpoint_fs;
 use crate::paths::AppPaths;
@@ -60,7 +60,7 @@ struct Transferring {
     name: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 #[serde(default)]
 struct JobStatus {
     finished: bool,
@@ -68,11 +68,6 @@ struct JobStatus {
     error: String,
 }
 
-impl Default for JobStatus {
-    fn default() -> Self {
-        Self { finished: false, success: false, error: String::new() }
-    }
-}
 
 #[derive(Deserialize)]
 struct JobReply {
@@ -80,24 +75,37 @@ struct JobReply {
 }
 
 pub fn now_secs() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 fn new_id(prefix: &str) -> String {
-    let millis = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
     format!("{prefix}{millis:x}{:04x}", rand::random::<u16>())
 }
 
 impl Runner {
     /// Loads saved jobs. Runs that were still going when Orbit last closed are marked as failed.
-    pub fn start(supervisor: Supervisor, paths: &AppPaths, on_change: impl Fn() + Send + Sync + 'static) -> AppResult<Arc<Self>> {
+    pub fn start(
+        supervisor: Supervisor,
+        paths: &AppPaths,
+        on_change: impl Fn() + Send + Sync + 'static,
+    ) -> AppResult<Arc<Self>> {
         let mut jobs = store::load(&paths.jobs())?;
         recover_interrupted(&mut jobs);
         let runner = Arc::new(Self {
             supervisor,
             jobs_file: paths.jobs(),
             logs_dir: paths.logs_dir(),
-            state: Mutex::new(State { jobs, running: HashMap::new() }),
+            state: Mutex::new(State {
+                jobs,
+                running: HashMap::new(),
+            }),
             on_change: Arc::new(on_change),
         });
         runner.persist()?;
@@ -111,7 +119,10 @@ impl Runner {
             .iter()
             .map(|job| JobView {
                 job: job.clone(),
-                progress: state.running.get(&job.id).map(|running| running.progress.clone()),
+                progress: state
+                    .running
+                    .get(&job.id)
+                    .map(|running| running.progress.clone()),
             })
             .collect()
     }
@@ -138,7 +149,10 @@ impl Runner {
         }
         self.persist()?;
         self.notify();
-        Ok(JobView { job, progress: None })
+        Ok(JobView {
+            job,
+            progress: None,
+        })
     }
 
     pub fn update(&self, id: &str, input: JobInput) -> AppResult<JobView> {
@@ -153,7 +167,10 @@ impl Runner {
             job.kind = input.kind;
             job.source = input.source;
             job.destination = input.destination;
-            JobView { job: job.clone(), progress: None }
+            JobView {
+                job: job.clone(),
+                progress: None,
+            }
         };
         self.persist()?;
         self.notify();
@@ -195,12 +212,20 @@ impl Runner {
             if state.running.contains_key(id) {
                 return Err(AppError::invalid("This job is already running."));
             }
-            let job = state.jobs.iter().find(|job| job.id == id).cloned().ok_or_else(|| AppError::invalid("That job no longer exists."))?;
+            let job = state
+                .jobs
+                .iter()
+                .find(|job| job.id == id)
+                .cloned()
+                .ok_or_else(|| AppError::invalid("That job no longer exists."))?;
             state.running.insert(
                 id.to_owned(),
                 Running {
                     rc_job_id: None,
-                    progress: Progress { run_id: run_id.clone(), ..Progress::default() },
+                    progress: Progress {
+                        run_id: run_id.clone(),
+                        ..Progress::default()
+                    },
                     cancel_requested: false,
                 },
             );
@@ -218,12 +243,18 @@ impl Runner {
     pub async fn cancel(&self, id: &str) -> AppResult<()> {
         let rc_job = {
             let mut state = self.state.lock().expect("jobs lock");
-            let running = state.running.get_mut(id).ok_or_else(|| AppError::invalid("This job is not running."))?;
+            let running = state
+                .running
+                .get_mut(id)
+                .ok_or_else(|| AppError::invalid("This job is not running."))?;
             running.cancel_requested = true;
             running.rc_job_id
         };
         if let Some(rc_job) = rc_job {
-            self.supervisor.client()?.call_value("job/stop", &json!({ "jobid": rc_job })).await?;
+            self.supervisor
+                .client()?
+                .call_value("job/stop", &json!({ "jobid": rc_job }))
+                .await?;
         }
         Ok(())
     }
@@ -232,15 +263,20 @@ impl Runner {
     pub fn read_log(&self, job_id: &str, run_id: &str) -> AppResult<String> {
         let file_name = {
             let state = self.state.lock().expect("jobs lock");
-            let job = state.jobs.iter().find(|job| job.id == job_id).ok_or_else(|| AppError::invalid("That job no longer exists."))?;
+            let job = state
+                .jobs
+                .iter()
+                .find(|job| job.id == job_id)
+                .ok_or_else(|| AppError::invalid("That job no longer exists."))?;
             job.runs
                 .iter()
                 .find(|run| run.id == run_id)
                 .map(|run| run.log_file.clone())
                 .ok_or_else(|| AppError::invalid("That run is no longer in the history."))?
         };
-        let text = fs::read_to_string(self.logs_dir.join(&file_name))
-            .map_err(|err| AppError::new(ErrorKind::Io, format!("Could not read the log: {err}")))?;
+        let text = fs::read_to_string(self.logs_dir.join(&file_name)).map_err(|err| {
+            AppError::new(ErrorKind::Io, format!("Could not read the log: {err}"))
+        })?;
         if text.len() <= LOG_VIEW_LIMIT {
             return Ok(text);
         }
@@ -248,7 +284,10 @@ impl Runner {
         while !text.is_char_boundary(start) {
             start += 1;
         }
-        Ok(format!("…earlier lines are in the log file…\n{}", &text[start..]))
+        Ok(format!(
+            "…earlier lines are in the log file…\n{}",
+            &text[start..]
+        ))
     }
 
     async fn execute(self: Arc<Self>, job: Job, run_id: String) {
@@ -271,11 +310,21 @@ impl Runner {
         let outcome = self.drive(&job, &run_id, &mut log).await;
         let (outcome, files, bytes, errors) = match outcome {
             Ok(totals) => totals,
-            Err(err) => (RunOutcome::Failed { message: err.message }, 0, 0, 0),
+            Err(err) => (
+                RunOutcome::Failed {
+                    message: err.message,
+                },
+                0,
+                0,
+                0,
+            ),
         };
         let outcome = {
             let state = self.state.lock().expect("jobs lock");
-            match (state.running.get(&job.id).map(|r| r.cancel_requested), outcome) {
+            match (
+                state.running.get(&job.id).map(|r| r.cancel_requested),
+                outcome,
+            ) {
                 (Some(true), _) => RunOutcome::Cancelled,
                 (_, outcome) => outcome,
             }
@@ -301,7 +350,12 @@ impl Runner {
     }
 
     /// Runs the rc job and follows its progress until it ends. Returns (outcome, files, bytes, errors).
-    async fn drive(&self, job: &Job, run_id: &str, log: &mut RunLog) -> AppResult<(RunOutcome, u64, u64, u64)> {
+    async fn drive(
+        &self,
+        job: &Job,
+        run_id: &str,
+        log: &mut RunLog,
+    ) -> AppResult<(RunOutcome, u64, u64, u64)> {
         let client = self.supervisor.client()?;
         let (endpoint, mut body) = match job.kind {
             super::JobKind::Sync => ("sync/sync", json!({})),
@@ -319,8 +373,13 @@ impl Runner {
         let mut seen_errors: Vec<String> = Vec::new();
         loop {
             tokio::time::sleep(POLL_INTERVAL).await;
-            let status: JobStatus = client.call("job/status", &json!({ "jobid": reply.jobid })).await?;
-            let stats: Stats = client.call("core/stats", &json!({ "group": group })).await.unwrap_or_default();
+            let status: JobStatus = client
+                .call("job/status", &json!({ "jobid": reply.jobid }))
+                .await?;
+            let stats: Stats = client
+                .call("core/stats", &json!({ "group": group }))
+                .await
+                .unwrap_or_default();
 
             if !stats.last_error.is_empty() && !seen_errors.contains(&stats.last_error) {
                 log.line(&format!("ERROR: {}", stats.last_error));
@@ -340,7 +399,11 @@ impl Runner {
                 let outcome = if status.success {
                     RunOutcome::Succeeded
                 } else {
-                    let message = if status.error.is_empty() { "rclone reported a problem.".to_owned() } else { status.error };
+                    let message = if status.error.is_empty() {
+                        "rclone reported a problem.".to_owned()
+                    } else {
+                        status.error
+                    };
                     RunOutcome::Failed { message }
                 };
                 return Ok((outcome, stats.transfers, stats.bytes, stats.errors));
@@ -394,14 +457,18 @@ pub fn trim_history(runs: &mut Vec<RunRecord>) -> Vec<String> {
     if runs.len() <= HISTORY_LIMIT {
         return Vec::new();
     }
-    runs.drain(HISTORY_LIMIT..).map(|old| old.log_file).collect()
+    runs.drain(HISTORY_LIMIT..)
+        .map(|old| old.log_file)
+        .collect()
 }
 
 /// A run still marked running when Orbit starts again was cut short by a crash or a forced quit.
 pub fn recover_interrupted(jobs: &mut [Job]) {
     for run in jobs.iter_mut().flat_map(|job| job.runs.iter_mut()) {
         if run.outcome == RunOutcome::Running {
-            run.outcome = RunOutcome::Failed { message: "Orbit closed before this run finished.".into() };
+            run.outcome = RunOutcome::Failed {
+                message: "Orbit closed before this run finished.".into(),
+            };
             run.finished_at = Some(run.started_at);
         }
     }
@@ -451,9 +518,26 @@ mod tests {
 
     #[test]
     fn describes_endpoints_for_the_log() {
-        assert_eq!(describe(&Endpoint::Remote { remote: "w".into(), path: String::new() }), "w:");
-        assert_eq!(describe(&Endpoint::Remote { remote: "w".into(), path: "Photos".into() }), "w:Photos");
-        assert_eq!(describe(&Endpoint::Local { path: "/home/ana".into() }), "/home/ana");
+        assert_eq!(
+            describe(&Endpoint::Remote {
+                remote: "w".into(),
+                path: String::new()
+            }),
+            "w:"
+        );
+        assert_eq!(
+            describe(&Endpoint::Remote {
+                remote: "w".into(),
+                path: "Photos".into()
+            }),
+            "w:Photos"
+        );
+        assert_eq!(
+            describe(&Endpoint::Local {
+                path: "/home/ana".into()
+            }),
+            "/home/ana"
+        );
     }
 
     fn run(id: &str, outcome: RunOutcome) -> RunRecord {
@@ -476,7 +560,13 @@ mod tests {
             .collect();
         let dropped = trim_history(&mut runs);
         assert_eq!(runs.len(), HISTORY_LIMIT);
-        assert_eq!(dropped, vec![format!("job-x-{}.log", HISTORY_LIMIT), format!("job-x-{}.log", HISTORY_LIMIT + 1)]);
+        assert_eq!(
+            dropped,
+            vec![
+                format!("job-x-{}.log", HISTORY_LIMIT),
+                format!("job-x-{}.log", HISTORY_LIMIT + 1)
+            ]
+        );
     }
 
     #[test]
@@ -488,7 +578,10 @@ mod tests {
             source: Endpoint::Local { path: "/a".into() },
             destination: Endpoint::Local { path: "/b".into() },
             enabled: true,
-            runs: vec![run("1", RunOutcome::Running), run("2", RunOutcome::Succeeded)],
+            runs: vec![
+                run("1", RunOutcome::Running),
+                run("2", RunOutcome::Succeeded),
+            ],
         }];
         recover_interrupted(&mut jobs);
         assert!(matches!(jobs[0].runs[0].outcome, RunOutcome::Failed { .. }));

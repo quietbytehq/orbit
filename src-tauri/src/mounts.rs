@@ -21,7 +21,10 @@ pub struct MountRegistry(Mutex<HashMap<String, String>>);
 
 impl MountRegistry {
     fn remember(&self, mount_point: &str, remote: &str) {
-        self.0.lock().expect("mount lock").insert(mount_point.to_owned(), remote.to_owned());
+        self.0
+            .lock()
+            .expect("mount lock")
+            .insert(mount_point.to_owned(), remote.to_owned());
     }
 
     fn forget(&self, mount_point: &str) {
@@ -89,9 +92,15 @@ pub fn support() -> MountSupport {
     let winfsp = winfsp_status();
     let (available, requirement) = match platform() {
         "linux" if fuse_available() => (true, None),
-        "linux" => (false, Some("Install FUSE 3 to mount remotes. On Ubuntu: sudo apt install fuse3.")),
+        "linux" => (
+            false,
+            Some("Install FUSE 3 to mount remotes. On Ubuntu: sudo apt install fuse3."),
+        ),
         "windows" if winfsp == WinFspStatus::Installed => (true, None),
-        "windows" => (false, Some("Install WinFsp to mount remotes. It is free and takes a minute.")),
+        "windows" => (
+            false,
+            Some("Install WinFsp to mount remotes. It is free and takes a minute."),
+        ),
         _ => (false, Some("Mounting is not available on this system.")),
     };
     MountSupport {
@@ -119,8 +128,8 @@ fn fuse_available() -> bool {
 #[cfg(windows)]
 pub fn winfsp_status() -> WinFspStatus {
     use std::path::Path;
-    use winreg::enums::HKEY_LOCAL_MACHINE;
     use winreg::RegKey;
+    use winreg::enums::HKEY_LOCAL_MACHINE;
 
     let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
     let install_dir = hklm
@@ -142,19 +151,38 @@ pub fn winfsp_status() -> WinFspStatus {
 /// or the first free drive letter from Z: down on Windows.
 pub fn suggest_mount_point(remote: &str) -> AppResult<String> {
     if cfg!(windows) {
-        return first_free_drive_letter().ok_or_else(|| AppError::new(ErrorKind::Unsupported, "No drive letter is free for this mount."));
+        return first_free_drive_letter().ok_or_else(|| {
+            AppError::new(
+                ErrorKind::Unsupported,
+                "No drive letter is free for this mount.",
+            )
+        });
     }
-    let home = std::env::var_os("HOME").ok_or_else(|| AppError::internal("Could not find your home folder."))?;
+    let home = std::env::var_os("HOME")
+        .ok_or_else(|| AppError::internal("Could not find your home folder."))?;
     let safe: String = remote
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
-    Ok(std::path::Path::new(&home).join("Orbit").join(safe).to_string_lossy().into_owned())
+    Ok(std::path::Path::new(&home)
+        .join("Orbit")
+        .join(safe)
+        .to_string_lossy()
+        .into_owned())
 }
 
 #[cfg(windows)]
 fn first_free_drive_letter() -> Option<String> {
-    ('D'..='Z').rev().map(|letter| format!("{letter}:")).find(|drive| !std::path::Path::new(&format!("{drive}\\")).exists())
+    ('D'..='Z')
+        .rev()
+        .map(|letter| format!("{letter}:"))
+        .find(|drive| !std::path::Path::new(&format!("{drive}\\")).exists())
 }
 
 #[cfg(not(windows))]
@@ -194,7 +222,10 @@ pub async fn mount(client: &RcClient, remote: &str, mount_point: &str) -> AppRes
 }
 
 pub async fn unmount(client: &RcClient, mount_point: &str) -> AppResult<()> {
-    client.call_value("mount/unmount", &json!({ "mountPoint": mount_point })).await.map(|_| ())
+    client
+        .call_value("mount/unmount", &json!({ "mountPoint": mount_point }))
+        .await
+        .map(|_| ())
 }
 
 /// Used on quit so no mount outlives Orbit. Errors are ignored: rcd is stopping anyway.
@@ -209,7 +240,9 @@ fn ensure_available() -> AppResult<()> {
     }
     Err(AppError::new(
         ErrorKind::Unsupported,
-        support.requirement.unwrap_or("Mounting is not available on this system."),
+        support
+            .requirement
+            .unwrap_or("Mounting is not available on this system."),
     ))
 }
 
@@ -224,7 +257,10 @@ pub fn suggest_mount_location(remote: String) -> AppResult<String> {
 }
 
 #[tauri::command]
-pub async fn list_mounts(supervisor: State<'_, Supervisor>, registry: State<'_, MountRegistry>) -> AppResult<Vec<MountInfo>> {
+pub async fn list_mounts(
+    supervisor: State<'_, Supervisor>,
+    registry: State<'_, MountRegistry>,
+) -> AppResult<Vec<MountInfo>> {
     let mut mounts = list(&supervisor.client()?).await?;
     for mount in &mut mounts {
         if let Some(remote) = registry.remote_for(&mount.mount_point) {

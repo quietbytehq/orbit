@@ -11,8 +11,8 @@ use orbit_lib::jobs::store;
 use orbit_lib::jobs::{Job, JobInput, JobKind, JobView, RunOutcome};
 use orbit_lib::mounts;
 use orbit_lib::paths::AppPaths;
-use orbit_lib::remotes::store as remote_store;
 use orbit_lib::rclone::{RcdState, Supervisor};
+use orbit_lib::remotes::store as remote_store;
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -36,36 +36,62 @@ async fn fixture() -> Option<Fixture> {
     let supervisor = Supervisor::start(spec(binary, &root.join("config")), |_| {});
     let deadline = Instant::now() + Duration::from_secs(30);
     while !matches!(supervisor.state(), RcdState::Healthy { .. }) {
-        assert!(Instant::now() < deadline, "rclone never became ready: {:?}", supervisor.state());
+        assert!(
+            Instant::now() < deadline,
+            "rclone never became ready: {:?}",
+            supervisor.state()
+        );
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    Some(Fixture { _dir: dir, root, paths, supervisor })
+    Some(Fixture {
+        _dir: dir,
+        root,
+        paths,
+        supervisor,
+    })
 }
 
 async fn alias(fx: &Fixture, name: &str, folder: &Path) {
     fs::create_dir_all(folder).unwrap();
     let client = fx.supervisor.client().unwrap();
-    let params: BTreeMap<String, String> = [("remote".to_owned(), folder.to_string_lossy().into_owned())].into();
-    remote_store::create(&client, name, "alias", &params).await.unwrap();
+    let params: BTreeMap<String, String> =
+        [("remote".to_owned(), folder.to_string_lossy().into_owned())].into();
+    remote_store::create(&client, name, "alias", &params)
+        .await
+        .unwrap();
 }
 
 fn remote(name: &str, path: &str) -> Endpoint {
-    Endpoint::Remote { remote: name.into(), path: path.into() }
+    Endpoint::Remote {
+        remote: name.into(),
+        path: path.into(),
+    }
 }
 
 fn local(path: &Path) -> Endpoint {
-    Endpoint::Local { path: path.to_string_lossy().into_owned() }
+    Endpoint::Local {
+        path: path.to_string_lossy().into_owned(),
+    }
 }
 
 fn input(name: &str, kind: JobKind, source: Endpoint, destination: Endpoint) -> JobInput {
-    JobInput { name: name.into(), kind, source, destination }
+    JobInput {
+        name: name.into(),
+        kind,
+        source,
+        destination,
+    }
 }
 
 /// Polls until the job has no run in progress, then returns its newest finished run.
 async fn wait_for_run(runner: &Runner, job_id: &str) -> (RunOutcome, u64, u64) {
     let deadline = Instant::now() + Duration::from_secs(120);
     loop {
-        let view = runner.list().into_iter().find(|v| v.job.id == job_id).expect("job exists");
+        let view = runner
+            .list()
+            .into_iter()
+            .find(|v| v.job.id == job_id)
+            .expect("job exists");
         if view.progress.is_none() {
             let run = view.job.runs.first().expect("a run was recorded");
             return (run.outcome.clone(), run.files, run.errors);
@@ -89,27 +115,54 @@ async fn copy_adds_files_and_keeps_extras_while_sync_removes_them() {
     let runner = Runner::start(fx.supervisor.clone(), &fx.paths, || {}).unwrap();
 
     let copy = runner
-        .create(input("Copy photos", JobKind::Copy, local(&source), remote("orbit-dst", "backup")))
+        .create(input(
+            "Copy photos",
+            JobKind::Copy,
+            local(&source),
+            remote("orbit-dst", "backup"),
+        ))
         .unwrap();
     runner.run(&copy.job.id).unwrap();
     let (outcome, _, errors) = wait_for_run(&runner, &copy.job.id).await;
     assert_eq!(outcome, RunOutcome::Succeeded);
     assert_eq!(errors, 0);
-    assert_eq!(fs::read(fx.root.join("remote/backup/one.txt")).unwrap(), b"1");
-    assert_eq!(fs::read(fx.root.join("remote/backup/nested/two.txt")).unwrap(), b"2");
-    assert!(fx.root.join("remote/backup/extra.txt").exists(), "copy must not delete");
+    assert_eq!(
+        fs::read(fx.root.join("remote/backup/one.txt")).unwrap(),
+        b"1"
+    );
+    assert_eq!(
+        fs::read(fx.root.join("remote/backup/nested/two.txt")).unwrap(),
+        b"2"
+    );
+    assert!(
+        fx.root.join("remote/backup/extra.txt").exists(),
+        "copy must not delete"
+    );
 
-    let log = runner.read_log(&copy.job.id, &runner.list()[0].job.runs[0].id).unwrap();
+    let log = runner
+        .read_log(&copy.job.id, &runner.list()[0].job.runs[0].id)
+        .unwrap();
     assert!(log.contains("Copy job \"Copy photos\""), "{log}");
-    assert!(log.contains("Finished. Everything was transferred."), "{log}");
+    assert!(
+        log.contains("Finished. Everything was transferred."),
+        "{log}"
+    );
 
     let sync = runner
-        .create(input("Mirror photos", JobKind::Sync, local(&source), remote("orbit-dst", "backup")))
+        .create(input(
+            "Mirror photos",
+            JobKind::Sync,
+            local(&source),
+            remote("orbit-dst", "backup"),
+        ))
         .unwrap();
     runner.run(&sync.job.id).unwrap();
     let (outcome, _, _) = wait_for_run(&runner, &sync.job.id).await;
     assert_eq!(outcome, RunOutcome::Succeeded);
-    assert!(!fx.root.join("remote/backup/extra.txt").exists(), "sync must remove extras");
+    assert!(
+        !fx.root.join("remote/backup/extra.txt").exists(),
+        "sync must remove extras"
+    );
 
     fx.supervisor.shutdown().await;
 }
@@ -121,7 +174,12 @@ async fn missing_source_fails_with_a_message_and_locks_are_enforced() {
     let runner = Runner::start(fx.supervisor.clone(), &fx.paths, || {}).unwrap();
 
     let job = runner
-        .create(input("Missing", JobKind::Copy, remote("orbit-src", "does-not-exist"), local(&fx.root.join("out"))))
+        .create(input(
+            "Missing",
+            JobKind::Copy,
+            remote("orbit-src", "does-not-exist"),
+            local(&fx.root.join("out")),
+        ))
         .unwrap();
     runner.run(&job.job.id).unwrap();
     let (outcome, _, _) = wait_for_run(&runner, &job.job.id).await;
@@ -132,7 +190,15 @@ async fn missing_source_fails_with_a_message_and_locks_are_enforced() {
 
     // A job that is not running can be edited and deleted.
     let renamed = runner
-        .update(&job.job.id, input("Renamed", JobKind::Copy, remote("orbit-src", "does-not-exist"), local(&fx.root.join("out"))))
+        .update(
+            &job.job.id,
+            input(
+                "Renamed",
+                JobKind::Copy,
+                remote("orbit-src", "does-not-exist"),
+                local(&fx.root.join("out")),
+            ),
+        )
         .unwrap();
     assert_eq!(renamed.job.name, "Renamed");
 
@@ -150,23 +216,47 @@ async fn cancel_stops_a_running_job_and_running_jobs_are_locked() {
 
     let runner = Runner::start(fx.supervisor.clone(), &fx.paths, || {}).unwrap();
     let job = runner
-        .create(input("Big copy", JobKind::Copy, local(&source), remote("orbit-dst", "")))
+        .create(input(
+            "Big copy",
+            JobKind::Copy,
+            local(&source),
+            remote("orbit-dst", ""),
+        ))
         .unwrap();
     runner.run(&job.job.id).unwrap();
 
     // Wait until rclone has the job, then try to change it while it runs.
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
-        let view = runner.list().into_iter().find(|v| v.job.id == job.job.id).unwrap();
+        let view = runner
+            .list()
+            .into_iter()
+            .find(|v| v.job.id == job.job.id)
+            .unwrap();
         if view.progress.is_some() && runner.active() == 1 {
             break;
         }
         assert!(Instant::now() < deadline);
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    assert!(runner.update(&job.job.id, input("Changed", JobKind::Copy, local(&source), remote("orbit-dst", ""))).is_err());
+    assert!(
+        runner
+            .update(
+                &job.job.id,
+                input(
+                    "Changed",
+                    JobKind::Copy,
+                    local(&source),
+                    remote("orbit-dst", "")
+                )
+            )
+            .is_err()
+    );
     assert!(runner.delete(&job.job.id).is_err());
-    assert!(runner.run(&job.job.id).is_err(), "a running job cannot start twice");
+    assert!(
+        runner.run(&job.job.id).is_err(),
+        "a running job cannot start twice"
+    );
 
     runner.cancel(&job.job.id).await.unwrap();
     let (outcome, _, _) = wait_for_run(&runner, &job.job.id).await;
@@ -200,7 +290,10 @@ async fn a_run_cut_short_by_a_crash_is_marked_failed_on_next_start() {
 
     let runner = Runner::start(fx.supervisor.clone(), &fx.paths, || {}).unwrap();
     let recovered: JobView = runner.list().remove(0);
-    assert!(matches!(recovered.job.runs[0].outcome, RunOutcome::Failed { .. }));
+    assert!(matches!(
+        recovered.job.runs[0].outcome,
+        RunOutcome::Failed { .. }
+    ));
     assert!(recovered.progress.is_none());
 
     fx.supervisor.shutdown().await;
@@ -220,16 +313,21 @@ async fn mount_makes_remote_files_visible_and_unmount_removes_them() {
     fs::create_dir_all(&mount_point).unwrap();
 
     let client = fx.supervisor.client().unwrap();
-    mounts::mount(&client, "orbit-mount", &mount_point.to_string_lossy()).await.unwrap();
+    mounts::mount(&client, "orbit-mount", &mount_point.to_string_lossy())
+        .await
+        .unwrap();
 
     let mounted = mounts::list(&client).await.unwrap();
     assert_eq!(mounted.len(), 1);
     assert_eq!(Path::new(&mounted[0].mount_point), mount_point.as_path());
 
-    let text = fs::read_to_string(mount_point.join("hello.txt")).expect("file visible through the mount");
+    let text =
+        fs::read_to_string(mount_point.join("hello.txt")).expect("file visible through the mount");
     assert_eq!(text, "from the remote");
 
-    mounts::unmount(&client, &mount_point.to_string_lossy()).await.unwrap();
+    mounts::unmount(&client, &mount_point.to_string_lossy())
+        .await
+        .unwrap();
     assert!(mounts::list(&client).await.unwrap().is_empty());
     assert!(!mount_point.join("hello.txt").exists());
 

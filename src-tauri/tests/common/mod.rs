@@ -13,11 +13,15 @@ pub fn find_rclone() -> Option<PathBuf> {
         return Some(PathBuf::from(path));
     }
     // The fetch script names the sidecar `rclone-<target-triple>`, as Tauri expects.
-    let sidecar = std::fs::read_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("binaries"))
-        .ok()?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .find(|path| path.file_name().is_some_and(|name| name.to_string_lossy().starts_with("rclone-")));
+    let sidecar =
+        std::fs::read_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("binaries"))
+            .ok()?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .find(|path| {
+                path.file_name()
+                    .is_some_and(|name| name.to_string_lossy().starts_with("rclone-"))
+            });
     if sidecar.is_some() {
         return sidecar;
     }
@@ -46,4 +50,3 @@ pub async fn wait_for_version(process: &RcdProcess) -> String {
         }
     }
 }
-

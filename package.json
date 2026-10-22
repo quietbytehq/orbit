@@ -12,7 +12,11 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "fetch:rclone": "bash scripts/fetch-rclone.sh",
+    "fetch:rclone:windows": "powershell -ExecutionPolicy Bypass -File scripts/fetch-rclone.ps1",
+    "bundle:linux": "npm run fetch:rclone && tauri build --bundles appimage,deb",
+    "bundle:windows": "npm run fetch:rclone:windows && tauri build --bundles msi"
   },
   "license": "MIT",
   "dependencies": {

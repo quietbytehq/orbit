@@ -26,8 +26,13 @@ pub enum FieldKind {
     Text,
     /// Never shown again after it is saved.
     Secret,
-    Number { min: u16, max: u16 },
-    Choice { options: &'static [Choice] },
+    Number {
+        min: u16,
+        max: u16,
+    },
+    Choice {
+        options: &'static [Choice],
+    },
 }
 
 /// One input on a wizard step. `key` is also the rclone parameter name.
@@ -54,23 +59,46 @@ pub struct ProviderDef {
 }
 
 const DRIVE_SCOPES: &[Choice] = &[
-    Choice { value: "drive", label: "Full access to my files" },
-    Choice { value: "drive.readonly", label: "Read-only access" },
+    Choice {
+        value: "drive",
+        label: "Full access to my files",
+    },
+    Choice {
+        value: "drive.readonly",
+        label: "Read-only access",
+    },
 ];
 
 const S3_PROVIDERS: &[Choice] = &[
-    Choice { value: "AWS", label: "Amazon S3" },
-    Choice { value: "Minio", label: "MinIO" },
-    Choice { value: "Wasabi", label: "Wasabi" },
-    Choice { value: "Cloudflare", label: "Cloudflare R2" },
-    Choice { value: "Other", label: "Backblaze B2 or another S3-compatible service" },
+    Choice {
+        value: "AWS",
+        label: "Amazon S3",
+    },
+    Choice {
+        value: "Minio",
+        label: "MinIO",
+    },
+    Choice {
+        value: "Wasabi",
+        label: "Wasabi",
+    },
+    Choice {
+        value: "Cloudflare",
+        label: "Cloudflare R2",
+    },
+    Choice {
+        value: "Other",
+        label: "Backblaze B2 or another S3-compatible service",
+    },
 ];
 
 const DRIVE_FIELDS: &[FieldDef] = &[FieldDef {
     key: "scope",
     label: "Access",
     help: "Read-only stops Orbit from changing anything in this account.",
-    kind: FieldKind::Choice { options: DRIVE_SCOPES },
+    kind: FieldKind::Choice {
+        options: DRIVE_SCOPES,
+    },
     required: false,
     default: Some("drive"),
 }];
@@ -80,7 +108,9 @@ const S3_FIELDS: &[FieldDef] = &[
         key: "provider",
         label: "Service",
         help: "Pick the service this storage belongs to.",
-        kind: FieldKind::Choice { options: S3_PROVIDERS },
+        kind: FieldKind::Choice {
+            options: S3_PROVIDERS,
+        },
         required: true,
         default: Some("AWS"),
     },
@@ -214,7 +244,9 @@ pub fn find(id: &str) -> Option<&'static ProviderDef> {
 
 /// Finds the wizard provider that owns an rclone remote type, if there is one.
 pub fn for_rclone_type(rclone_type: &str) -> Option<&'static ProviderDef> {
-    PROVIDERS.iter().find(|provider| provider.rclone_type == rclone_type)
+    PROVIDERS
+        .iter()
+        .find(|provider| provider.rclone_type == rclone_type)
 }
 
 /// Names of fields that hold secrets for a provider. Their values never go back to the UI.
@@ -238,7 +270,10 @@ pub fn build_parameters(
 ) -> AppResult<BTreeMap<String, String>> {
     let mut params = BTreeMap::new();
     for field in provider.fields {
-        let raw = values.get(field.key).map(|value| value.trim()).unwrap_or("");
+        let raw = values
+            .get(field.key)
+            .map(|value| value.trim())
+            .unwrap_or("");
         if raw.is_empty() {
             let kept = update.is_some_and(|saved| saved.iter().any(|key| key == field.key));
             if kept {
@@ -247,7 +282,10 @@ pub fn build_parameters(
             if let Some(default) = field.default {
                 params.insert(field.key.to_owned(), default.to_owned());
             } else if field.required {
-                return Err(AppError::invalid(format!("Please fill in {}.", field.label.to_lowercase())));
+                return Err(AppError::invalid(format!(
+                    "Please fill in {}.",
+                    field.label.to_lowercase()
+                )));
             } else if update.is_some() {
                 params.insert(field.key.to_owned(), String::new());
             }
@@ -255,9 +293,9 @@ pub fn build_parameters(
         }
         match field.kind {
             FieldKind::Number { min, max } => {
-                let number: u32 = raw.parse().map_err(|_| {
-                    AppError::invalid(format!("{} must be a number.", field.label))
-                })?;
+                let number: u32 = raw
+                    .parse()
+                    .map_err(|_| AppError::invalid(format!("{} must be a number.", field.label)))?;
                 if number < u32::from(min) || number > u32::from(max) {
                     return Err(AppError::invalid(format!(
                         "{} must be between {min} and {max}.",
@@ -267,7 +305,10 @@ pub fn build_parameters(
             }
             FieldKind::Choice { options } => {
                 if !options.iter().any(|option| option.value == raw) {
-                    return Err(AppError::invalid(format!("Choose a valid option for {}.", field.label.to_lowercase())));
+                    return Err(AppError::invalid(format!(
+                        "Choose a valid option for {}.",
+                        field.label.to_lowercase()
+                    )));
                 }
             }
             FieldKind::Text | FieldKind::Secret => {}
@@ -283,11 +324,14 @@ fn check_cross_field_rules(
     params: &mut BTreeMap<String, String>,
     update: Option<&[String]>,
 ) -> AppResult<()> {
-    let filled = |params: &BTreeMap<String, String>, key: &str| params.get(key).is_some_and(|value| !value.is_empty());
+    let filled = |params: &BTreeMap<String, String>, key: &str| {
+        params.get(key).is_some_and(|value| !value.is_empty())
+    };
     match provider.id {
         "sftp" => {
             let kept_password = update.is_some_and(|saved| saved.iter().any(|key| key == "pass"));
-            let has_password = filled(params, "pass") || (kept_password && !params.contains_key("pass"));
+            let has_password =
+                filled(params, "pass") || (kept_password && !params.contains_key("pass"));
             if !has_password && !filled(params, "key_file") {
                 return Err(AppError::invalid("Enter a password or choose a key file."));
             }
@@ -295,7 +339,9 @@ fn check_cross_field_rules(
         "s3" => {
             let service = params.get("provider").map(String::as_str).unwrap_or("AWS");
             if service != "AWS" && !filled(params, "endpoint") {
-                return Err(AppError::invalid("Enter the endpoint address for this service."));
+                return Err(AppError::invalid(
+                    "Enter the endpoint address for this service.",
+                ));
             }
             if service == "AWS" && update.is_none() {
                 // Amazon S3 needs no endpoint, so an empty one is not stored when creating.
@@ -329,7 +375,10 @@ mod tests {
     use super::*;
 
     fn values(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-        pairs.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect()
     }
 
     #[test]
@@ -351,7 +400,12 @@ mod tests {
     #[test]
     fn s3_requires_keys() {
         let s3 = find("s3").unwrap();
-        let err = build_parameters(s3, &values(&[("provider", "AWS"), ("access_key_id", "AK")]), None).unwrap_err();
+        let err = build_parameters(
+            s3,
+            &values(&[("provider", "AWS"), ("access_key_id", "AK")]),
+            None,
+        )
+        .unwrap_err();
         assert_eq!(err.message, "Please fill in secret access key.");
     }
 
@@ -379,7 +433,11 @@ mod tests {
         let s3 = find("s3").unwrap();
         let err = build_parameters(
             s3,
-            &values(&[("provider", "Cloudflare"), ("access_key_id", "AK"), ("secret_access_key", "SK")]),
+            &values(&[
+                ("provider", "Cloudflare"),
+                ("access_key_id", "AK"),
+                ("secret_access_key", "SK"),
+            ]),
             None,
         )
         .unwrap_err();
@@ -404,7 +462,12 @@ mod tests {
         let sftp = find("sftp").unwrap();
         let err = build_parameters(
             sftp,
-            &values(&[("host", "h"), ("user", "u"), ("pass", "p"), ("port", "99999")]),
+            &values(&[
+                ("host", "h"),
+                ("user", "u"),
+                ("pass", "p"),
+                ("port", "99999"),
+            ]),
             None,
         )
         .unwrap_err();
@@ -433,13 +496,24 @@ mod tests {
         let saved = vec!["pass".to_owned()];
         let params = build_parameters(
             sftp,
-            &values(&[("host", "new.example.com"), ("user", "ana"), ("pass", ""), ("key_file", "")]),
+            &values(&[
+                ("host", "new.example.com"),
+                ("user", "ana"),
+                ("pass", ""),
+                ("key_file", ""),
+            ]),
             Some(&saved),
         )
         .unwrap();
         assert_eq!(params["host"], "new.example.com");
-        assert!(!params.contains_key("pass"), "a blank saved secret must not be overwritten");
-        assert_eq!(params["key_file"], "", "a cleared optional field is sent as empty");
+        assert!(
+            !params.contains_key("pass"),
+            "a blank saved secret must not be overwritten"
+        );
+        assert_eq!(
+            params["key_file"], "",
+            "a cleared optional field is sent as empty"
+        );
     }
 
     #[test]
@@ -456,7 +530,10 @@ mod tests {
 
     #[test]
     fn remote_names() {
-        assert_eq!(validate_remote_name("  Work-Drive_2 ").unwrap(), "Work-Drive_2");
+        assert_eq!(
+            validate_remote_name("  Work-Drive_2 ").unwrap(),
+            "Work-Drive_2"
+        );
         assert!(validate_remote_name("").is_err());
         assert!(validate_remote_name("has space").is_err());
         assert!(validate_remote_name("colon:name").is_err());

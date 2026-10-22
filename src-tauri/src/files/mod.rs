@@ -91,7 +91,10 @@ mod tests {
     fn joins_and_splits() {
         assert_eq!(join("", "Photos"), "Photos");
         assert_eq!(join("Photos", "2024"), "Photos/2024");
-        assert_eq!(split("Photos/2024/cat.jpg"), ("Photos/2024".into(), "cat.jpg".into()));
+        assert_eq!(
+            split("Photos/2024/cat.jpg"),
+            ("Photos/2024".into(), "cat.jpg".into())
+        );
         assert_eq!(split("cat.jpg"), (String::new(), "cat.jpg".into()));
     }
 

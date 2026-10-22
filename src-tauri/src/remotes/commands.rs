@@ -1,6 +1,6 @@
 use super::health::{HealthStore, RemoteHealth};
 use super::providers::{self, AuthKind, ProviderDef};
-use super::{oauth, store, ConnectionTest, RemoteForm, RemoteSummary};
+use super::{ConnectionTest, RemoteForm, RemoteSummary, oauth, store};
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::rclone::Supervisor;
 use serde::Deserialize;
@@ -39,14 +39,18 @@ fn summary(provider: &ProviderDef, name: &str) -> RemoteSummary {
 fn credentials_provider(id: &str) -> AppResult<&'static ProviderDef> {
     let provider = providers::find(id).ok_or_else(|| AppError::invalid("Unknown service."))?;
     if provider.auth != AuthKind::Credentials {
-        return Err(AppError::invalid("This service signs in through the browser."));
+        return Err(AppError::invalid(
+            "This service signs in through the browser.",
+        ));
     }
     Ok(provider)
 }
 
 async fn ensure_name_free(client: &crate::rclone::RcClient, name: &str) -> AppResult<()> {
     if store::exists(client, name).await? {
-        return Err(AppError::invalid(format!("A connection named {name} already exists.")));
+        return Err(AppError::invalid(format!(
+            "A connection named {name} already exists."
+        )));
     }
     Ok(())
 }
@@ -57,7 +61,10 @@ pub fn list_providers() -> &'static [ProviderDef] {
 }
 
 #[tauri::command]
-pub async fn list_remotes(supervisor: State<'_, Supervisor>, health: State<'_, HealthStore>) -> AppResult<Vec<RemoteSummary>> {
+pub async fn list_remotes(
+    supervisor: State<'_, Supervisor>,
+    health: State<'_, HealthStore>,
+) -> AppResult<Vec<RemoteSummary>> {
     let client = supervisor.client()?;
     let mut remotes = store::list(&client).await?;
     for remote in &mut remotes {
@@ -67,12 +74,19 @@ pub async fn list_remotes(supervisor: State<'_, Supervisor>, health: State<'_, H
 }
 
 #[tauri::command]
-pub async fn get_remote_form(name: String, supervisor: State<'_, Supervisor>) -> AppResult<RemoteForm> {
+pub async fn get_remote_form(
+    name: String,
+    supervisor: State<'_, Supervisor>,
+) -> AppResult<RemoteForm> {
     store::form(&supervisor.client()?, &name).await
 }
 
 #[tauri::command]
-pub async fn create_remote(request: NewRemote, supervisor: State<'_, Supervisor>, health: State<'_, HealthStore>) -> AppResult<RemoteSummary> {
+pub async fn create_remote(
+    request: NewRemote,
+    supervisor: State<'_, Supervisor>,
+    health: State<'_, HealthStore>,
+) -> AppResult<RemoteSummary> {
     let provider = credentials_provider(&request.provider_id)?;
     let name = providers::validate_remote_name(&request.name)?;
     let params = providers::build_parameters(provider, &request.values, None)?;
@@ -92,9 +106,12 @@ pub async fn start_browser_sign_in(
     supervisor: State<'_, Supervisor>,
     health: State<'_, HealthStore>,
 ) -> AppResult<RemoteSummary> {
-    let provider = providers::find(&request.provider_id).ok_or_else(|| AppError::invalid("Unknown service."))?;
+    let provider = providers::find(&request.provider_id)
+        .ok_or_else(|| AppError::invalid("Unknown service."))?;
     if provider.auth != AuthKind::Browser {
-        return Err(AppError::invalid("This service uses keys or a password, not a browser sign-in."));
+        return Err(AppError::invalid(
+            "This service uses keys or a password, not a browser sign-in.",
+        ));
     }
     let name = providers::validate_remote_name(&request.name)?;
     let params = providers::build_parameters(provider, &request.values, None)?;
@@ -114,10 +131,16 @@ pub async fn cancel_browser_sign_in(supervisor: State<'_, Supervisor>) -> AppRes
 }
 
 #[tauri::command]
-pub async fn update_remote(name: String, update: RemoteUpdate, supervisor: State<'_, Supervisor>, health: State<'_, HealthStore>) -> AppResult<()> {
+pub async fn update_remote(
+    name: String,
+    update: RemoteUpdate,
+    supervisor: State<'_, Supervisor>,
+    health: State<'_, HealthStore>,
+) -> AppResult<()> {
     let client = supervisor.client()?;
     let form = store::form(&client, &name).await?;
-    let provider = providers::find(&form.provider_id).ok_or_else(|| AppError::new(ErrorKind::Unsupported, "Unknown service."))?;
+    let provider = providers::find(&form.provider_id)
+        .ok_or_else(|| AppError::new(ErrorKind::Unsupported, "Unknown service."))?;
     let params = providers::build_parameters(provider, &update.values, Some(&form.saved_secrets))?;
     store::update(&client, &name, &params).await?;
     health.forget(&name);
@@ -125,7 +148,12 @@ pub async fn update_remote(name: String, update: RemoteUpdate, supervisor: State
 }
 
 #[tauri::command]
-pub async fn rename_remote(name: String, new_name: String, supervisor: State<'_, Supervisor>, health: State<'_, HealthStore>) -> AppResult<String> {
+pub async fn rename_remote(
+    name: String,
+    new_name: String,
+    supervisor: State<'_, Supervisor>,
+    health: State<'_, HealthStore>,
+) -> AppResult<String> {
     let new_name = providers::validate_remote_name(&new_name)?;
     if new_name == name {
         return Ok(name);
@@ -138,21 +166,31 @@ pub async fn rename_remote(name: String, new_name: String, supervisor: State<'_,
 }
 
 #[tauri::command]
-pub async fn delete_remote(name: String, supervisor: State<'_, Supervisor>, health: State<'_, HealthStore>) -> AppResult<()> {
+pub async fn delete_remote(
+    name: String,
+    supervisor: State<'_, Supervisor>,
+    health: State<'_, HealthStore>,
+) -> AppResult<()> {
     store::delete(&supervisor.client()?, &name).await?;
     health.forget(&name);
     Ok(())
 }
 
 #[tauri::command]
-pub async fn test_remote(name: String, supervisor: State<'_, Supervisor>, health: State<'_, HealthStore>) -> AppResult<ConnectionTest> {
+pub async fn test_remote(
+    name: String,
+    supervisor: State<'_, Supervisor>,
+    health: State<'_, HealthStore>,
+) -> AppResult<ConnectionTest> {
     let result = store::test(&supervisor.client()?, &name).await?;
     health.set(
         &name,
         if result.ok {
             RemoteHealth::Ok
         } else {
-            RemoteHealth::Failed { message: result.message.clone() }
+            RemoteHealth::Failed {
+                message: result.message.clone(),
+            }
         },
     );
     Ok(result)

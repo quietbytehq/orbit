@@ -7,10 +7,10 @@ mod common;
 
 use common::{spec, wait_for_version};
 use orbit_lib::error::ErrorKind;
+use orbit_lib::rclone::process::RcdProcess;
 use orbit_lib::remotes::health::RemoteHealth;
 use orbit_lib::remotes::oauth;
 use orbit_lib::remotes::store;
-use orbit_lib::rclone::process::RcdProcess;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -27,20 +27,30 @@ async fn start(dir: &std::path::Path) -> Option<RcdProcess> {
 }
 
 fn params(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
-    pairs.iter().map(|(k, v)| ((*k).to_owned(), (*v).to_owned())).collect()
+    pairs
+        .iter()
+        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+        .collect()
 }
 
 #[tokio::test]
 async fn local_remote_round_trip() {
     let dir = tempfile::tempdir().unwrap();
-    let Some(process) = start(dir.path()).await else { return };
+    let Some(process) = start(dir.path()).await else {
+        return;
+    };
     let client = process.client();
 
-    store::create(&client, "orbit-local", "local", &BTreeMap::new()).await.unwrap();
+    store::create(&client, "orbit-local", "local", &BTreeMap::new())
+        .await
+        .unwrap();
     assert!(store::exists(&client, "orbit-local").await.unwrap());
 
     let listed = store::list(&client).await.unwrap();
-    let remote = listed.iter().find(|r| r.name == "orbit-local").expect("listed");
+    let remote = listed
+        .iter()
+        .find(|r| r.name == "orbit-local")
+        .expect("listed");
     assert_eq!(remote.rclone_type, "local");
     assert!(remote.provider_id.is_none());
 
@@ -48,11 +58,19 @@ async fn local_remote_round_trip() {
     assert!(test.ok, "local remote should connect: {}", test.message);
 
     // Update keeps untouched keys and changes the one we pass.
-    store::update(&client, "orbit-local", &params(&[("nounc", "true")])).await.unwrap();
+    store::update(&client, "orbit-local", &params(&[("nounc", "true")]))
+        .await
+        .unwrap();
     let form = store::form(&client, "orbit-local").await.unwrap_err();
-    assert_eq!(form.kind, ErrorKind::Unsupported, "local is not a wizard type, so no edit form");
+    assert_eq!(
+        form.kind,
+        ErrorKind::Unsupported,
+        "local is not a wizard type, so no edit form"
+    );
 
-    store::rename(&client, "orbit-local", "orbit-renamed").await.unwrap();
+    store::rename(&client, "orbit-local", "orbit-renamed")
+        .await
+        .unwrap();
     assert!(!store::exists(&client, "orbit-local").await.unwrap());
     assert!(store::exists(&client, "orbit-renamed").await.unwrap());
 
@@ -65,12 +83,21 @@ async fn local_remote_round_trip() {
 #[tokio::test]
 async fn sftp_form_hides_saved_password() {
     let dir = tempfile::tempdir().unwrap();
-    let Some(process) = start(dir.path()).await else { return };
+    let Some(process) = start(dir.path()).await else {
+        return;
+    };
     let client = process.client();
 
     // Port 1 on loopback is essentially never open, so the connection test fails quickly.
-    let sftp = params(&[("host", "127.0.0.1"), ("port", "1"), ("user", "ana"), ("pass", "hunter2-secret")]);
-    store::create(&client, "orbit-sftp", "sftp", &sftp).await.unwrap();
+    let sftp = params(&[
+        ("host", "127.0.0.1"),
+        ("port", "1"),
+        ("user", "ana"),
+        ("pass", "hunter2-secret"),
+    ]);
+    store::create(&client, "orbit-sftp", "sftp", &sftp)
+        .await
+        .unwrap();
 
     let form = store::form(&client, "orbit-sftp").await.unwrap();
     assert_eq!(form.provider_id, "sftp");
@@ -78,11 +105,18 @@ async fn sftp_form_hides_saved_password() {
     assert_eq!(form.values["host"], "127.0.0.1");
     assert!(!form.values.contains_key("pass"));
     let serialized = serde_json::to_string(&form).unwrap();
-    assert!(!serialized.contains("hunter2"), "the stored password must not reach the UI");
+    assert!(
+        !serialized.contains("hunter2"),
+        "the stored password must not reach the UI"
+    );
 
     let result = store::test(&client, "orbit-sftp").await.unwrap();
     assert!(!result.ok);
-    assert!(result.message.contains("refused") || result.message.contains("reach"), "{}", result.message);
+    assert!(
+        result.message.contains("refused") || result.message.contains("reach"),
+        "{}",
+        result.message
+    );
 
     process.stop().await;
 }
@@ -90,7 +124,9 @@ async fn sftp_form_hides_saved_password() {
 #[tokio::test]
 async fn browser_sign_in_reports_url_and_can_be_cancelled() {
     let dir = tempfile::tempdir().unwrap();
-    let Some(process) = start(dir.path()).await else { return };
+    let Some(process) = start(dir.path()).await else {
+        return;
+    };
     let client = process.client();
 
     // rclone's callback server listens on a fixed port. Skip if something else holds it.
@@ -116,15 +152,26 @@ async fn browser_sign_in_reports_url_and_can_be_cancelled() {
     });
 
     let url = wait_for_url(&urls).await;
-    assert!(url.starts_with("http://127.0.0.1:53682/auth?state="), "{url}");
+    assert!(
+        url.starts_with("http://127.0.0.1:53682/auth?state="),
+        "{url}"
+    );
     let state = url.split("state=").nth(1).unwrap();
-    let callback = reqwest::get(format!("http://127.0.0.1:53682/?state={state}&code=bogus")).await.unwrap();
+    let callback = reqwest::get(format!("http://127.0.0.1:53682/?state={state}&code=bogus"))
+        .await
+        .unwrap();
     assert!(callback.status().is_success());
 
-    let outcome = tokio::time::timeout(Duration::from_secs(90), sign_in).await.expect("sign-in should finish").unwrap();
+    let outcome = tokio::time::timeout(Duration::from_secs(90), sign_in)
+        .await
+        .expect("sign-in should finish")
+        .unwrap();
     assert!(outcome.is_err(), "a bogus code must not succeed");
     assert!(started.elapsed() < Duration::from_secs(90));
-    assert!(!store::exists(&client, "orbit-drive").await.unwrap(), "failed sign-in must not leave a remote");
+    assert!(
+        !store::exists(&client, "orbit-drive").await.unwrap(),
+        "failed sign-in must not leave a remote"
+    );
 
     // Second run: cancel while waiting.
     let urls: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
@@ -132,15 +179,24 @@ async fn browser_sign_in_reports_url_and_can_be_cancelled() {
     let sign_in = tokio::spawn({
         let client = client.clone();
         async move {
-            oauth::create_with_browser(&client, "orbit-drive", "drive", &BTreeMap::new(), move |url| {
-                sink.lock().unwrap().push(url.to_owned());
-            })
+            oauth::create_with_browser(
+                &client,
+                "orbit-drive",
+                "drive",
+                &BTreeMap::new(),
+                move |url| {
+                    sink.lock().unwrap().push(url.to_owned());
+                },
+            )
             .await
         }
     });
     wait_for_url(&urls).await;
     oauth::cancel(&client).await.unwrap();
-    let outcome = tokio::time::timeout(Duration::from_secs(30), sign_in).await.expect("cancel should end sign-in").unwrap();
+    let outcome = tokio::time::timeout(Duration::from_secs(30), sign_in)
+        .await
+        .expect("cancel should end sign-in")
+        .unwrap();
     assert!(outcome.is_err());
 
     process.stop().await;

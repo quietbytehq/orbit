@@ -3,13 +3,16 @@
   import StatusBadge from "$lib/components/StatusBadge.svelte";
   import { api, errorMessage } from "$lib/api";
   import type { RemoteSummary } from "$lib/api/types";
+  import { jobs } from "$lib/stores/jobs.svelte";
   import { rcd } from "$lib/stores/rcd.svelte";
-  import { remoteBadge } from "$lib/util/remote";
+  import { transfers } from "$lib/stores/transfers.svelte";
+  import { remoteBadge, remotesInUse } from "$lib/util/remote";
 
   let remotes = $state<RemoteSummary[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let testing = $state<Record<string, boolean>>({});
+  const inUse = $derived(remotesInUse(transfers.items, jobs.items));
 
   async function load() {
     loading = true;
@@ -41,6 +44,8 @@
 
   onMount(() => {
     void load();
+    void transfers.start();
+    void jobs.start();
   });
 
   // Reload when rclone comes back, since the list cannot be read while it is down.
@@ -75,7 +80,7 @@
 {:else}
   <ul class="list">
     {#each remotes as remote (remote.name)}
-      {@const badge = remoteBadge(remote)}
+      {@const badge = remoteBadge(remote, inUse)}
       <li class="card row">
         <div class="meta">
           <span class="name">{remote.name}</span>

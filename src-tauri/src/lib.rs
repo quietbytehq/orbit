@@ -4,21 +4,22 @@ pub mod files;
 pub mod jobs;
 pub mod mounts;
 pub mod paths;
-mod reveal;
-pub mod remotes;
 pub mod rclone;
+pub mod remotes;
+mod reveal;
 pub mod settings;
 pub mod status;
 mod tray;
 
-use paths::AppPaths;
 use files::transfers::{Item as TransferItem, TransferQueue};
-use jobs::runner::Runner;
 use jobs::JobView;
-use remotes::health::HealthStore;
-use std::sync::Arc;
-use reveal::{RevealGate, RevealState};
+use jobs::runner::Runner;
+use paths::AppPaths;
 use rclone::{RcdState, Supervisor};
+use remotes::health::HealthStore;
+use reveal::{RevealGate, RevealState};
+use settings::SettingsStore;
+use std::sync::Arc;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tray::TrayHandle;
@@ -45,7 +46,11 @@ pub fn refresh_status(app: &AppHandle) {
         return;
     };
     let state = supervisor.state();
-    tray::refresh(app, &state, status::overall(&state, queue.active(), runner.active()));
+    tray::refresh(
+        app,
+        &state,
+        status::overall(&state, queue.active(), runner.active()),
+    );
 }
 
 fn on_rcd_change(app: &AppHandle, state: &RcdState) {
@@ -75,17 +80,29 @@ pub fn run() {
                 settings::Settings::default()
             });
             let spec = rclone::spec_for(&paths, &settings);
+            if !settings.splash_enabled
+                && let Some(splash) = app.get_webview_window("splash")
+            {
+                let _ = splash.close();
+            }
+            app.manage(SettingsStore::new(settings.clone()));
 
-            app.manage(RevealState(Mutex::new(RevealGate::new(settings.splash_enabled))));
+            app.manage(RevealState(Mutex::new(RevealGate::new(
+                settings.splash_enabled,
+            ))));
             app.manage(HealthStore::default());
             app.manage(TrayHandle::empty());
             let handle = app.handle().clone();
             let supervisor = Supervisor::start(spec, move |state| on_rcd_change(&handle, state));
             let transfer_handle = app.handle().clone();
-            let queue = TransferQueue::start(supervisor.clone(), settings.transfer_concurrency as usize, move |items: &[TransferItem]| {
-                let _ = transfer_handle.emit(TRANSFERS_EVENT, items);
-                refresh_status(&transfer_handle);
-            });
+            let queue = TransferQueue::start(
+                supervisor.clone(),
+                settings.transfer_concurrency as usize,
+                move |items: &[TransferItem]| {
+                    let _ = transfer_handle.emit(TRANSFERS_EVENT, items);
+                    refresh_status(&transfer_handle);
+                },
+            );
             app.manage(queue);
             let jobs_handle = app.handle().clone();
             let runner = Runner::start(supervisor.clone(), &paths, move || {
@@ -145,6 +162,8 @@ pub fn run() {
             files::commands::list_transfers,
             files::commands::cancel_transfer,
             files::commands::clear_finished_transfers,
+            commands::get_settings,
+            commands::save_settings,
             jobs::commands::list_jobs,
             jobs::commands::create_job,
             jobs::commands::update_job,

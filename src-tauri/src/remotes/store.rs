@@ -5,7 +5,7 @@ use super::{ConnectionTest, RemoteForm, RemoteSummary};
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::rclone::RcClient;
 use serde::Deserialize;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -28,13 +28,15 @@ pub async fn list(client: &RcClient) -> AppResult<Vec<RemoteSummary>> {
         let provider = providers::for_rclone_type(&rclone_type);
         summaries.push(RemoteSummary {
             provider_id: provider.map(|p| p.id.to_owned()),
-            provider_title: provider.map(|p| p.title.to_owned()).unwrap_or_else(|| rclone_type.clone()),
+            provider_title: provider
+                .map(|p| p.title.to_owned())
+                .unwrap_or_else(|| rclone_type.clone()),
             rclone_type,
             health: super::health::RemoteHealth::Unknown,
             name,
         });
     }
-    summaries.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    summaries.sort_by_key(|remote| remote.name.to_lowercase());
     Ok(summaries)
 }
 
@@ -56,12 +58,17 @@ async fn get_raw(client: &RcClient, name: &str) -> AppResult<BTreeMap<String, St
 /// Returns a remote's settings for the edit form. Secret values are withheld.
 pub async fn form(client: &RcClient, name: &str) -> AppResult<RemoteForm> {
     let raw = get_raw(client, name).await?;
-    let rclone_type = raw
-        .get("type")
-        .cloned()
-        .ok_or_else(|| AppError::new(ErrorKind::NotRunning, format!("No remote named {name} was found.")))?;
+    let rclone_type = raw.get("type").cloned().ok_or_else(|| {
+        AppError::new(
+            ErrorKind::NotRunning,
+            format!("No remote named {name} was found."),
+        )
+    })?;
     let provider = providers::for_rclone_type(&rclone_type).ok_or_else(|| {
-        AppError::new(ErrorKind::Unsupported, format!("Orbit cannot edit {rclone_type} remotes yet."))
+        AppError::new(
+            ErrorKind::Unsupported,
+            format!("Orbit cannot edit {rclone_type} remotes yet."),
+        )
     })?;
 
     let secret_keys: Vec<&str> = providers::secret_keys(provider).collect();
@@ -104,7 +111,11 @@ pub async fn create(
 }
 
 /// Changes the given parameters on an existing remote. Keys not listed keep their values.
-pub async fn update(client: &RcClient, name: &str, params: &BTreeMap<String, String>) -> AppResult<()> {
+pub async fn update(
+    client: &RcClient,
+    name: &str,
+    params: &BTreeMap<String, String>,
+) -> AppResult<()> {
     client
         .call_value(
             "config/update",
@@ -119,7 +130,10 @@ pub async fn update(client: &RcClient, name: &str, params: &BTreeMap<String, Str
 }
 
 pub async fn delete(client: &RcClient, name: &str) -> AppResult<()> {
-    client.call_value("config/delete", &json!({ "name": name })).await.map(|_| ())
+    client
+        .call_value("config/delete", &json!({ "name": name }))
+        .await
+        .map(|_| ())
 }
 
 /// Renames by copying the section under the new name and then deleting the old one.
@@ -129,7 +143,10 @@ pub async fn rename(client: &RcClient, from: &str, to: &str) -> AppResult<()> {
     let rclone_type = raw
         .remove("type")
         .ok_or_else(|| AppError::invalid(format!("No remote named {from} was found.")))?;
-    let params: Map<String, Value> = raw.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
+    let params: Map<String, Value> = raw
+        .into_iter()
+        .map(|(k, v)| (k, Value::String(v)))
+        .collect();
     client
         .call_value(
             "config/create",
@@ -173,9 +190,11 @@ pub fn friendly_connection_error(raw: &str) -> String {
     if contains(&["no such host", "lookup "]) {
         "Orbit could not find that server. Check the address.".to_owned()
     } else if contains(&["connection refused"]) {
-        "The server refused the connection. Check the port, and that the service is running.".to_owned()
+        "The server refused the connection. Check the port, and that the service is running."
+            .to_owned()
     } else if contains(&["timeout", "deadline exceeded", "timed out"]) {
-        "The server did not answer in time. Check your network connection and the address.".to_owned()
+        "The server did not answer in time. Check your network connection and the address."
+            .to_owned()
     } else if contains(&["x509", "certificate"]) {
         "The server's security certificate could not be verified.".to_owned()
     } else if contains(&[
@@ -207,10 +226,18 @@ mod tests {
 
     #[test]
     fn friendly_messages_cover_common_failures() {
-        assert!(friendly_connection_error("dial tcp: lookup nope.example: no such host").contains("find that server"));
-        assert!(friendly_connection_error("dial tcp 1.2.3.4:22: connect: connection refused").contains("refused"));
+        assert!(
+            friendly_connection_error("dial tcp: lookup nope.example: no such host")
+                .contains("find that server")
+        );
+        assert!(
+            friendly_connection_error("dial tcp 1.2.3.4:22: connect: connection refused")
+                .contains("refused")
+        );
         assert!(friendly_connection_error("context deadline exceeded").contains("in time"));
-        assert!(friendly_connection_error("ssh: unable to authenticate").contains("sign-in details"));
+        assert!(
+            friendly_connection_error("ssh: unable to authenticate").contains("sign-in details")
+        );
         assert!(friendly_connection_error("SignatureDoesNotMatch").contains("sign-in details"));
     }
 
