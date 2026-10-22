@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, formatSpeed } from "./format";
+import { formatBytes, formatDuration, formatSpeed } from "./format";
 
 describe("formatBytes", () => {
   it("uses bytes below one kilobyte", () => {
@@ -30,5 +30,20 @@ describe("formatBytes", () => {
 describe("formatSpeed", () => {
   it("appends /s", () => {
     expect(formatSpeed(2_500_000)).toBe("2.5 MB/s");
+  });
+});
+
+describe("formatDuration", () => {
+  it("shows seconds, minutes and hours", () => {
+    expect(formatDuration(5)).toBe("5 s");
+    expect(formatDuration(0.2)).toBe("1 s");
+    expect(formatDuration(180)).toBe("3 min");
+    expect(formatDuration(3600)).toBe("1 h");
+    expect(formatDuration(3900)).toBe("1 h 5 min");
+  });
+
+  it("hides unknown values", () => {
+    expect(formatDuration(null)).toBe("");
+    expect(formatDuration(-3)).toBe("");
   });
 });

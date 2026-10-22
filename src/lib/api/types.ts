@@ -86,3 +86,67 @@ export interface NewRemote {
   name: string;
   values: Record<string, string>;
 }
+
+/** Mirrors `files::Endpoint`. Remote paths are relative to the remote root. */
+export type Endpoint = { kind: "remote"; remote: string; path: string } | { kind: "local"; path: string };
+
+/** Mirrors `files::FileEntry`. */
+export interface FileEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  modTime: string | null;
+  mimeType: string | null;
+}
+
+/** Mirrors `files::transfers::Mode`. */
+export type TransferMode = "copy" | "move";
+
+/** Mirrors `files::transfers::TransferRequest`. */
+export interface TransferRequest {
+  source: Endpoint;
+  destination: Endpoint;
+  mode: TransferMode;
+  name: string;
+  isDir: boolean;
+}
+
+/** Mirrors `files::transfers::Direction`. */
+export type TransferDirection = "upload" | "download" | "copy" | "move";
+
+/** Mirrors `files::transfers::State`. */
+export type TransferState =
+  | { state: "queued" }
+  | { state: "running" }
+  | { state: "done" }
+  | { state: "failed"; message: string }
+  | { state: "cancelled" };
+
+/** Mirrors `files::transfers::Item`. */
+export interface TransferItem {
+  id: number;
+  name: string;
+  direction: TransferDirection;
+  isDir: boolean;
+  from: string;
+  to: string;
+  state: TransferState;
+  bytes: number;
+  totalBytes: number;
+  speed: number;
+  etaSeconds: number | null;
+}
+
+/** Mirrors `files::local::LocalEntry`. */
+export interface LocalEntry {
+  parent: string;
+  name: string;
+  isDir: boolean;
+}
+
+/** An item named in a delete request. */
+export interface ItemRef {
+  path: string;
+  isDir: boolean;
+}

@@ -2,11 +2,14 @@
   import { page } from "$app/state";
   import { onMount } from "svelte";
   import { rcd } from "$lib/stores/rcd.svelte";
+  import { transfers } from "$lib/stores/transfers.svelte";
+  import TransferPanel from "$lib/components/TransferPanel.svelte";
 
   let { children } = $props();
 
   onMount(() => {
     void rcd.start();
+    void transfers.start();
   });
 
   function isCurrent(href: string): boolean {
@@ -34,9 +37,12 @@
       {/each}
     </nav>
   </aside>
-  <main class="content">
-    {@render children()}
-  </main>
+  <div class="column">
+    <main class="content">
+      {@render children()}
+    </main>
+    <TransferPanel />
+  </div>
 </div>
 
 <style>
@@ -83,10 +89,17 @@
     background: var(--sidebar-selected);
     font-weight: 500;
   }
+  .column {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+  }
   .content {
     overflow: auto;
     padding: 36px 32px 32px;
     min-width: 0;
+    flex: 1;
   }
   :global(.content h1) {
     font-size: 22px;

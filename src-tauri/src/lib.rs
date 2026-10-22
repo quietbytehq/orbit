@@ -1,5 +1,6 @@
 mod commands;
 pub mod error;
+pub mod files;
 pub mod paths;
 mod reveal;
 pub mod remotes;
@@ -9,7 +10,9 @@ pub mod status;
 mod tray;
 
 use paths::AppPaths;
+use files::transfers::{Item as TransferItem, TransferQueue};
 use remotes::health::HealthStore;
+use std::sync::Arc;
 use reveal::{RevealGate, RevealState};
 use rclone::{RcdState, Supervisor};
 use std::sync::Mutex;
@@ -17,6 +20,7 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tray::TrayHandle;
 
 pub const RCD_STATE_EVENT: &str = "rcd://state";
+pub const TRANSFERS_EVENT: &str = "transfers://update";
 
 /// Closes the splash and shows the main window.
 pub fn reveal_main_window(app: &AppHandle) {
@@ -26,9 +30,17 @@ pub fn reveal_main_window(app: &AppHandle) {
     tray::show_main_window(app);
 }
 
+/// Recomputes the tray state from rclone health and current activity.
+pub fn refresh_status(app: &AppHandle) {
+    let supervisor = app.state::<Supervisor>();
+    let state = supervisor.state();
+    let transfers = app.state::<Arc<TransferQueue>>().active();
+    tray::refresh(app, &state, status::overall(&state, transfers, 0));
+}
+
 fn on_rcd_change(app: &AppHandle, state: &RcdState) {
     let _ = app.emit(RCD_STATE_EVENT, state);
-    tray::refresh(app, state, status::overall(state, 0, 0));
+    refresh_status(app);
 
     if matches!(state, RcdState::Healthy { .. } | RcdState::Failed { .. }) {
         let reveal = app.state::<RevealState>();
@@ -59,6 +71,12 @@ pub fn run() {
             app.manage(TrayHandle::empty());
             let handle = app.handle().clone();
             let supervisor = Supervisor::start(spec, move |state| on_rcd_change(&handle, state));
+            let transfer_handle = app.handle().clone();
+            let queue = TransferQueue::start(supervisor.clone(), settings.transfer_concurrency as usize, move |items: &[TransferItem]| {
+                let _ = transfer_handle.emit(TRANSFERS_EVENT, items);
+                refresh_status(&transfer_handle);
+            });
+            app.manage(queue);
             app.manage(supervisor);
             app.manage(paths);
 
@@ -98,6 +116,15 @@ pub fn run() {
             remotes::commands::rename_remote,
             remotes::commands::delete_remote,
             remotes::commands::test_remote,
+            files::commands::inspect_local_paths,
+            files::commands::list_files,
+            files::commands::create_folder,
+            files::commands::delete_items,
+            files::commands::rename_item,
+            files::commands::enqueue_transfers,
+            files::commands::list_transfers,
+            files::commands::cancel_transfer,
+            files::commands::clear_finished_transfers,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Orbit");

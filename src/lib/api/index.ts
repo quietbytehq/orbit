@@ -3,17 +3,23 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppError,
   ConnectionTest,
+  FileEntry,
+  ItemRef,
+  LocalEntry,
   NewRemote,
   ProviderDef,
   RcdState,
   RemoteForm,
   RemoteSummary,
+  TransferItem,
+  TransferRequest,
 } from "./types";
 
 export type * from "./types";
 
 export const RCD_STATE_EVENT = "rcd://state";
 export const SIGN_IN_URL_EVENT = "wizard://sign-in-url";
+export const TRANSFERS_EVENT = "transfers://update";
 
 /** Typed wrappers around Tauri commands. Each one rejects with an AppError on failure. */
 export const api = {
@@ -32,10 +38,25 @@ export const api = {
   renameRemote: (name: string, newName: string) => invoke<string>("rename_remote", { name, newName }),
   deleteRemote: (name: string) => invoke<void>("delete_remote", { name }),
   testRemote: (name: string) => invoke<ConnectionTest>("test_remote", { name }),
+
+  inspectLocalPaths: (paths: string[]) => invoke<LocalEntry[]>("inspect_local_paths", { paths }),
+  listFiles: (remote: string, path: string) => invoke<FileEntry[]>("list_files", { remote, path }),
+  createFolder: (remote: string, path: string) => invoke<void>("create_folder", { remote, path }),
+  deleteItems: (remote: string, items: ItemRef[]) => invoke<void>("delete_items", { remote, items }),
+  renameItem: (remote: string, path: string, isDir: boolean, newName: string) =>
+    invoke<string>("rename_item", { remote, path, isDir, newName }),
+  enqueueTransfers: (requests: TransferRequest[]) => invoke<number[]>("enqueue_transfers", { requests }),
+  listTransfers: () => invoke<TransferItem[]>("list_transfers"),
+  cancelTransfer: (id: number) => invoke<void>("cancel_transfer", { id }),
+  clearFinishedTransfers: () => invoke<void>("clear_finished_transfers"),
 };
 
 export function onRcdState(handler: (state: RcdState) => void): Promise<UnlistenFn> {
   return listen<RcdState>(RCD_STATE_EVENT, (event) => handler(event.payload));
+}
+
+export function onTransfers(handler: (items: TransferItem[]) => void): Promise<UnlistenFn> {
+  return listen<TransferItem[]>(TRANSFERS_EVENT, (event) => handler(event.payload));
 }
 
 export function onSignInUrl(handler: (url: string) => void): Promise<UnlistenFn> {

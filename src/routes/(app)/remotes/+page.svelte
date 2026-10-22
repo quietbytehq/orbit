@@ -89,6 +89,7 @@
           <button class="button" onclick={() => test(remote.name)} disabled={testing[remote.name]}>
             {testing[remote.name] ? "Checking…" : "Test"}
           </button>
+          <a class="button" href={`/browse/${encodeURIComponent(remote.name)}`}>Open</a>
           <a class="button" href={`/remotes/${encodeURIComponent(remote.name)}`}>Edit</a>
         </div>
       </li>
