@@ -14,15 +14,53 @@ Workflow: `.github/workflows/ci.yml`, triggered on every push, pull request, and
 | Bundle (Linux) | ubuntu-22.04 | `tauri build --bundles appimage,deb`, uploads `orbit-linux-x86_64` (AppImage + .deb) |
 | Bundle (Windows) | windows-latest | `tauri build --bundles msi` via `scripts/fetch-rclone.ps1`, uploads `orbit-windows-x86_64` (.msi); then runs `cargo test` and writes a per-test table to the job summary without failing the job |
 
-Status: interim: run 2 (https://github.com/quietbytehq/orbit/actions/runs/39824491555) was still in progress when this was written; this section is updated below once it finishes.
+Status: **passing**. Run 4 (https://github.com/quietbytehq/orbit/actions/runs/39826656272) was
+the first fully green run: all three jobs succeeded and three artifacts were uploaded
+(`orbit-linux-x86_64` with the AppImage and .deb, 141 MB; `orbit-windows-x86_64` with the .msi,
+32 MB; `rust-tests-windows-log`). Run 6 (commit `2410d9e`, the two Windows test fixes below; GitHub numbered it 6):
+**green on all three jobs** (https://github.com/quietbytehq/orbit/actions/runs/39830337462), and
+the Windows test step reports 79 of 79 unit tests and 18 of 18 integration tests passing, so the
+two fixes below hold. The final doc-only push of this report triggers one more run of the same code.
 
-Fixes made while iterating:
-- `scripts/fetch-rclone.ps1`: on the runner, Windows PowerShell 5.1 launched from npm could not
-  autoload `Get-FileHash`. The script now hashes with `System.Security.Cryptography.SHA256`,
-  unzips with `System.IO.Compression.ZipFile`, and downloads with `System.Net.WebClient`, which
-  work in both PowerShell 5.1 and 7. Checksum verification is unchanged.
+Iterations, in order:
+1. Run 1: the Windows job failed in `scripts/fetch-rclone.ps1`. Windows PowerShell 5.1, launched
+   from npm on the runner, could not autoload `Get-FileHash`. The script now hashes with
+   `System.Security.Cryptography.SHA256`, unzips with `System.IO.Compression.ZipFile` and
+   downloads with `System.Net.WebClient`, which exist in both PowerShell 5.1 and 7. Checksum
+   verification is unchanged. The Linux jobs of run 1 were cancelled by the next push while apt
+   was crawling on the Azure mirror (a 27 MB webkit package took over six minutes); later runs
+   finished that step in about a minute, so nothing was changed there.
+2. Run 3: Linux check and Linux bundle green. The Windows msi build failed on a real compile
+   error in pre-existing code: on Windows `RcdProcess` holds the kill-on-close job object, whose
+   raw `HANDLE` is a `*mut c_void`, so the supervisor's future was not `Send`. Fixed with
+   `unsafe impl Send/Sync` on the handle wrapper (`src-tauri/src/rclone/process.rs`) with the
+   safety argument in a comment. A local cross type-check with the `x86_64-pc-windows-gnu` target
+   could not confirm it, because Orbit's build script needs MinGW resource tooling (as the README
+   already says); run 4 confirmed it.
+3. Run 4: everything green. The Windows test report showed two test failures (the job is
+   report-only, so it stayed green). Both were test portability problems, fixed in run 5:
+   - `files::transfers::tests::folder_download_uses_sync_copy_on_full_paths` expected
+     `:local:/home/ana/2024` where Windows joins with a backslash. The test now uses
+     `std::path::MAIN_SEPARATOR`.
+   - `browser_sign_in_reports_url_and_can_be_cancelled` called rclone's OAuth callback with a
+     bogus code and `unwrap`ped the HTTP reply; on Windows rclone closes that connection without
+     replying. The test now tolerates a dropped reply; the assertion that matters (sign-in ends
+     with an error and leaves no remote) is unchanged.
 
-Windows Rust tests: pending (see the job summary of the run above).
+Windows Rust tests (run 4, before the two test fixes; `windows-latest`, rclone v1.75.1 from
+`downloads.rclone.org`). In run 6, after the fixes, every row is all-passing:
+
+| Suite | Result on Windows |
+|---|---|
+| lib unit tests | 78 of 79 passed; the one failure is the path separator test fixed above |
+| `tests/files.rs` (browse, transfers, cancel, failure message) | 4 of 4 passed |
+| `tests/jobs_mounts.rs` (copy, sync, cancel, crash recovery, **scheduled runs**, mount) | 6 of 6 passed; the mount test skips itself because WinFsp is not on the runner |
+| `tests/rcd.rs` (auth, supervisor health, restart, retry budget) | 4 of 4 passed |
+| `tests/remotes.rs` (local round trip, SFTP form, browser sign-in, health) | 3 of 4 passed; the sign-in failure is the dropped-reply case fixed above |
+
+So the rcd lifecycle (including the Windows job object and `CREATE_NO_WINDOW` spawn path), the
+RC client, file operations, transfers, jobs and the new scheduler all run for real on Windows.
+Not exercised on Windows: mounting (needs WinFsp) and the tray and windows (no app launched).
 
 Not done: `cargo fmt --check` is not in CI because the existing code is not rustfmt-clean (for
 example `src-tauri/src/files/transfers.rs`). Only the files touched tonight were formatted.
