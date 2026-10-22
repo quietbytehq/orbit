@@ -112,9 +112,12 @@ The same colors are used for the tray icons and for the status badges on remotes
   - 1.8–2.4 s: the "Orbit" wordmark fades up below the icon.
   - 2.4–3.0 s: the tagline "All your clouds, in one orbit." fades in.
   - 3.0–3.5 s: "Powered by rclone · v0.1" appears at the bottom.
+  - 3.5–3.8 s: the content fades to the splash background, then the splash finishes and its
+    window closes, so the cut to the main window is soft.
 - Text is white on dark and dark on light. Easing is ease-out only, so nothing bounces.
-- Skippable by click or any key press.
-- Reduced motion: no animation. The final frame is shown for 1.5 s, then the splash finishes.
+- Skippable by click or any key press. A skip runs the same 0.3 s fade-out first.
+- Reduced motion: no animation and no fade. The final frame is shown for 1.5 s, then the splash
+  finishes.
 - The main window opens once the splash has finished and rclone has settled. Settings can turn the splash off; the change applies at the next launch.
 
 ## 4. Features for v0.1

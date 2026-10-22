@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PHASES, REDUCED_HOLD_MS, SPLASH_MS, phaseTiming } from "./timeline";
+import { FADE_OUT_MS, PHASES, REDUCED_HOLD_MS, SPLASH_MS, SPLASH_TOTAL_MS, phaseTiming } from "./timeline";
 
 describe("splash timeline", () => {
   it("runs 3.5 seconds in contiguous phases", () => {
@@ -20,5 +20,12 @@ describe("splash timeline", () => {
 
   it("holds the final frame for 1.5 seconds with reduced motion", () => {
     expect(REDUCED_HOLD_MS).toBe(1500);
+  });
+
+  it("fades out over the last 0.3 seconds, after the content sequence", () => {
+    expect(FADE_OUT_MS).toBe(300);
+    expect(SPLASH_TOTAL_MS).toBe(SPLASH_MS + FADE_OUT_MS);
+    // The fade must not start while the footer is still appearing.
+    expect(SPLASH_TOTAL_MS - FADE_OUT_MS).toBeGreaterThanOrEqual(PHASES.footer[1]);
   });
 });

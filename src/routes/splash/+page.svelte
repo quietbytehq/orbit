@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "$lib/api";
-  import { PHASES, REDUCED_HOLD_MS, SPLASH_MS, phaseTiming } from "$lib/splash/timeline";
+  import { FADE_OUT_MS, PHASES, REDUCED_HOLD_MS, SPLASH_MS, phaseTiming } from "$lib/splash/timeline";
   import { applyTheme } from "$lib/util/theme";
 
   // Geometry matches assets/tray-icons-v2/gen.py so the splash echoes the app icon.
@@ -15,6 +15,8 @@
 
   let satellite = $state({ x: 0, y: 0 });
   let still = $state(false);
+  /** True once the content is fading to the background. */
+  let leaving = $state(false);
   let finished = false;
 
   const [ringDelay, ringDuration] = phaseTiming("ring");
@@ -34,9 +36,17 @@
     };
   }
 
+  /**
+   * Fades the content to the background, then hands over to the backend, which closes this
+   * window. With reduced motion there is no fade: the hand-over happens at once.
+   */
   async function finish() {
     if (finished) return;
     finished = true;
+    leaving = true;
+    if (!still) {
+      await new Promise((resolve) => window.setTimeout(resolve, FADE_OUT_MS));
+    }
     try {
       await api.splashFinished();
     } catch {
@@ -85,6 +95,7 @@
 <div
   class="splash"
   class:still
+  class:leaving
   role="button"
   tabindex="0"
   aria-label="Skip intro"
@@ -94,35 +105,37 @@
     void finish();
   }}
 >
-  <svg viewBox="0 0 256 256" class="mark" aria-hidden="true">
-    <ellipse
-      class="ring"
-      cx={CX}
-      cy={CY}
-      rx={RX}
-      ry={RY}
-      transform="rotate({ROT} {CX} {CY})"
-      pathLength="1"
-      style:animation-delay="{ringDelay}ms"
-      style:animation-duration="{ringDuration}ms"
-    />
-    <g class="cloud" style:animation-delay="{cloudDelay}ms" style:animation-duration="{cloudDuration}ms">
-      <circle cx="70" cy="146" r="30" />
-      <circle cx="116" cy="112" r="44" />
-      <circle cx="168" cy="124" r="36" />
-      <circle cx="194" cy="148" r="28" />
-      <rect x="70" y="130" width="124" height="46" />
-    </g>
-    <circle class="satellite" cx={satellite.x} cy={satellite.y} r="11" />
-  </svg>
+  <div class="content" style:transition-duration="{FADE_OUT_MS}ms">
+    <svg viewBox="0 0 256 256" class="mark" aria-hidden="true">
+      <ellipse
+        class="ring"
+        cx={CX}
+        cy={CY}
+        rx={RX}
+        ry={RY}
+        transform="rotate({ROT} {CX} {CY})"
+        pathLength="1"
+        style:animation-delay="{ringDelay}ms"
+        style:animation-duration="{ringDuration}ms"
+      />
+      <g class="cloud" style:animation-delay="{cloudDelay}ms" style:animation-duration="{cloudDuration}ms">
+        <circle cx="70" cy="146" r="30" />
+        <circle cx="116" cy="112" r="44" />
+        <circle cx="168" cy="124" r="36" />
+        <circle cx="194" cy="148" r="28" />
+        <rect x="70" y="130" width="124" height="46" />
+      </g>
+      <circle class="satellite" cx={satellite.x} cy={satellite.y} r="11" />
+    </svg>
 
-  <p class="wordmark" style:animation-delay="{wordDelay}ms" style:animation-duration="{wordDuration}ms">Orbit</p>
-  <p class="tagline" style:animation-delay="{taglineDelay}ms" style:animation-duration="{taglineDuration}ms">
-    All your clouds, in one orbit.
-  </p>
-  <p class="footer" style:animation-delay="{footerDelay}ms" style:animation-duration="{footerDuration}ms">
-    Powered by rclone · v0.1
-  </p>
+    <p class="wordmark" style:animation-delay="{wordDelay}ms" style:animation-duration="{wordDuration}ms">Orbit</p>
+    <p class="tagline" style:animation-delay="{taglineDelay}ms" style:animation-duration="{taglineDuration}ms">
+      All your clouds, in one orbit.
+    </p>
+    <p class="footer" style:animation-delay="{footerDelay}ms" style:animation-duration="{footerDuration}ms">
+      Powered by rclone · v0.1
+    </p>
+  </div>
 </div>
 
 <style>
@@ -137,17 +150,30 @@
   .splash {
     position: relative;
     height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
     background: var(--splash-bg);
     border-radius: 28px;
     color: var(--splash-ink);
     cursor: pointer;
     user-select: none;
     overflow: hidden;
+  }
+  /*
+   * Everything but the background sits in .content, so the whole sequence can fade out as one.
+   * The children keep their own keyframe animations; those would override a per-element opacity,
+   * which is why the wrapper is what fades.
+   */
+  .content {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: opacity 300ms ease-out; /* the duration is set inline from FADE_OUT_MS */
+  }
+  .splash.leaving .content {
+    opacity: 0;
   }
   .mark {
     width: 180px;

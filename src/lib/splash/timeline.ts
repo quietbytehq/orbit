@@ -9,8 +9,17 @@ export const PHASES = {
 
 export type Phase = keyof typeof PHASES;
 
-/** Total length of the intro. The main window is revealed when it ends. */
+/** Length of the intro's content sequence. The fade-out starts when it ends. */
 export const SPLASH_MS = PHASES.footer[1];
+
+/**
+ * The content fades to the splash background over this long before the window closes, so the
+ * cut to the main window is a soft one. A skip (click or key) runs the same fade.
+ */
+export const FADE_OUT_MS = 300;
+
+/** Moment the splash hands over to the backend: content sequence plus the fade-out. */
+export const SPLASH_TOTAL_MS = SPLASH_MS + FADE_OUT_MS;
 
 /** With reduced motion, the final frame is shown this long, then the splash finishes. */
 export const REDUCED_HOLD_MS = 1500;
