@@ -169,6 +169,10 @@ jobs:
         if: always()
         shell: pwsh
         run: |
+          if (-not (Test-Path rust-tests-windows.log)) {
+            "## Rust tests on Windows`n`nThe test step did not run (an earlier step failed)." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+            exit 0
+          }
           $log = Get-Content rust-tests-windows.log -Raw
           $lines = $log -split "`r?`n"
           $results = $lines | Where-Object { $_ -match '^test \S+ \.\.\. (ok|FAILED|ignored)' }

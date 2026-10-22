@@ -10,21 +10,37 @@ $Triple = "x86_64-pc-windows-msvc"
 $Zip = "rclone-$Version-windows-amd64.zip"
 $Base = "https://downloads.rclone.org/$Version"
 
+# The hash and the unzip go through .NET rather than Get-FileHash and Expand-Archive: those
+# cmdlets live in modules that Windows PowerShell 5.1 cannot always autoload (for example when it
+# is launched from npm on a GitHub runner), while the .NET types are always there.
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+function Get-Sha256Hex([string]$Path) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($Path)
+    try { $hash = $sha.ComputeHash($stream) }
+    finally { $stream.Dispose(); $sha.Dispose() }
+    return ([System.BitConverter]::ToString($hash) -replace '-', '').ToLowerInvariant()
+}
+
 $Work = Join-Path ([System.IO.Path]::GetTempPath()) ("orbit-rclone-" + [System.Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $Work | Out-Null
 try {
     Write-Host "Fetching rclone $Version (windows/amd64)"
-    Invoke-WebRequest -Uri "$Base/$Zip" -OutFile (Join-Path $Work $Zip) -UseBasicParsing
-    Invoke-WebRequest -Uri "$Base/SHA256SUMS" -OutFile (Join-Path $Work "SHA256SUMS") -UseBasicParsing
+    $web = New-Object System.Net.WebClient
+    $web.DownloadFile("$Base/$Zip", (Join-Path $Work $Zip))
+    $web.DownloadFile("$Base/SHA256SUMS", (Join-Path $Work "SHA256SUMS"))
 
     $line = Get-Content (Join-Path $Work "SHA256SUMS") | Where-Object { $_ -match [regex]::Escape($Zip) + '$' } | Select-Object -First 1
     if (-not $line) { throw "No checksum for $Zip in SHA256SUMS." }
     $expected = ($line -split '\s+')[0].ToLowerInvariant()
-    $actual = (Get-FileHash -Algorithm SHA256 -Path (Join-Path $Work $Zip)).Hash.ToLowerInvariant()
+    $actual = Get-Sha256Hex (Join-Path $Work $Zip)
     if ($expected -ne $actual) { throw "SHA256 mismatch for $Zip." }
 
-    Expand-Archive -Path (Join-Path $Work $Zip) -DestinationPath $Work -Force
-    $exe = Get-ChildItem -Path $Work -Recurse -Filter "rclone.exe" | Select-Object -First 1
+    $Unzipped = Join-Path $Work "unzipped"
+    [System.IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $Work $Zip), $Unzipped)
+    $exe = Get-ChildItem -Path $Unzipped -Recurse -Filter "rclone.exe" | Select-Object -First 1
     if (-not $exe) { throw "rclone.exe was not found in $Zip." }
 
     New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
