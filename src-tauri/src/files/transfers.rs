@@ -536,7 +536,11 @@ mod tests {
         .unwrap();
         assert_eq!(call.endpoint, "sync/copy");
         assert_eq!(call.body["srcFs"], "work:Photos/2024");
-        assert_eq!(call.body["dstFs"], ":local:/home/ana/2024");
+        // The local side is joined with the platform separator, so Windows gets a backslash.
+        assert_eq!(
+            call.body["dstFs"],
+            format!(":local:/home/ana{}2024", std::path::MAIN_SEPARATOR)
+        );
         assert!(call.body.get("deleteEmptySrcDirs").is_none());
     }
 

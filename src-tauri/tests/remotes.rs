@@ -157,10 +157,12 @@ async fn browser_sign_in_reports_url_and_can_be_cancelled() {
         "{url}"
     );
     let state = url.split("state=").nth(1).unwrap();
-    let callback = reqwest::get(format!("http://127.0.0.1:53682/?state={state}&code=bogus"))
-        .await
-        .unwrap();
-    assert!(callback.status().is_success());
+    // On Windows rclone can close this connection without a reply once it has the code; what
+    // matters is that the sign-in below ends with an error, so a dropped reply is not a failure.
+    match reqwest::get(format!("http://127.0.0.1:53682/?state={state}&code=bogus")).await {
+        Ok(callback) => assert!(callback.status().is_success()),
+        Err(err) => eprintln!("callback ended without a reply (tolerated): {err}"),
+    }
 
     let outcome = tokio::time::timeout(Duration::from_secs(90), sign_in)
         .await
