@@ -173,6 +173,13 @@ mod job {
     /// A job object that kills its processes when the handle is closed.
     pub struct KillOnClose(HANDLE);
 
+    // SAFETY: the wrapped value is a kernel object handle, not a pointer into memory. Handles are
+    // process-wide and may be used from any thread; the only operation after creation is the
+    // `CloseHandle` in `Drop`, which runs exactly once. The raw `HANDLE` type is `*mut c_void`,
+    // which is why these impls are needed for `RcdProcess` to live inside a spawned future.
+    unsafe impl Send for KillOnClose {}
+    unsafe impl Sync for KillOnClose {}
+
     impl KillOnClose {
         pub fn for_child(child: &std::process::Child) -> io::Result<Self> {
             // SAFETY: every call takes handles we own, and each failure path closes the job.
