@@ -78,7 +78,10 @@ The app data directory is what Tauri's `app_data_dir()` returns for identifier `
 
 - macOS Big Sur/Sonoma inspired: sidebar navigation, translucent (vibrancy-like) panels, 12 px
   corner radius on windows and cards, 8 px on controls.
-- Typography: `-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", Inter, Roboto, Ubuntu, sans-serif`.
+- Typography: `-apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI Variable", "Segoe UI", Roboto, Ubuntu, sans-serif`.
+  Inter is bundled (`static/fonts/InterVariable.woff2`, SIL Open Font License 1.1, licence file
+  alongside), so after SF Pro every platform falls back to the same face. The splash wordmark uses
+  `"SF Pro Display", Inter`.
 - Light and dark themes. Default follows the system; the setting can be forced to light or dark.
 - Translucency: CSS `backdrop-filter` with a solid fallback when it is unavailable.
 

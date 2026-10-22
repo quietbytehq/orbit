@@ -123,6 +123,11 @@ Everything is under the Tauri app data folder: `~/.local/share/com.orbit.rclone`
 - The rclone that ships with Orbit is what it runs by default. If you choose a custom rclone, a snap-packaged build may not be able to write to the app data folder.
 - The WinFsp installer is not bundled. See SPEC §6.
 
+## Third-party
+
+- [rclone](https://rclone.org), MIT licence, bundled as a sidecar binary.
+- [Inter](https://rsms.me/inter/) typeface, SIL Open Font License 1.1, bundled in `static/fonts/` with its licence file.
+
 ## Roadmap
 
 See SPEC §9.

@@ -1,10 +1,24 @@
 /*
+ * Inter (SIL Open Font License 1.1, see static/fonts/LICENSE-Inter.txt) is bundled so the UI
+ * looks the same on every platform. It is the fallback right after SF Pro, which only macOS has.
+ * The variable file carries weights 100-900 and the optical size axis, so the wordmark gets the
+ * display cut automatically at large sizes.
+ */
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/*
  * Design tokens for Orbit. Values come from SPEC.md §3.
  * Light is the default. Dark applies under the system preference unless the user forces light,
  * and also when the user forces dark via data-theme.
  */
 :root {
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", Inter,
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, "Segoe UI Variable", "Segoe UI",
     Roboto, Ubuntu, sans-serif;
 
   --radius-window: 12px;

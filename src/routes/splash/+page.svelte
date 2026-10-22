@@ -178,7 +178,7 @@
   }
   .wordmark {
     margin: 10px 0 0;
-    font-family: "SF Pro Display", var(--font-ui);
+    font-family: "SF Pro Display", Inter, var(--font-ui);
     font-size: 34px;
     font-weight: 300;
     letter-spacing: 0.04em;
