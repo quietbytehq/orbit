@@ -1,7 +1,7 @@
 # Orbit for rclone — Specification
 
-Version: 0.1 (target)
-Status: Draft, drives the v0.1 build.
+Version: 0.2
+Status: Drives the v0.2 build. v0.1 sections are kept where still true; §10 lists what v0.2 added.
 
 ## 1. Purpose
 
@@ -333,7 +333,16 @@ Each milestone is committed to local git with a message describing it. Nothing i
   `scripts/rename-bundles.mjs` renames them after `tauri build`; the `bundle:*` npm scripts and CI
   run it.
 
-## 9. Out of scope for v0.1 (roadmap)
+## 10. What v0.2 added
+
+- Plain-language UI with platform words (§3.4), lucide icons, a trimmed app icon (§3.3).
+- Splash: full on first launch and after an update, short otherwise, or off (§3.5).
+- Scheduled backups (§4.3), remembered drives and folders with automatic reconnection (§4.3),
+  "Start Orbit when I sign in" (§4.6), the network share (SMB) wizard (§4.1).
+- Error details behind "Show details" (§3.4), size tooltip for cloud-native documents (§4.2).
+- Bundle files named `orbit_*` (§8); CI on GitHub Actions (Linux and Windows builds, tests).
+
+## 9. Out of scope for v0.2 (roadmap)
 
 - Richer scheduling: cron-like expressions, weekly schedules, run on login, and catch-up of runs
   missed while Orbit was closed. (Interval and daily schedules that run while Orbit is open are
@@ -346,3 +355,4 @@ Each milestone is committed to local git with a message describing it. Nothing i
 - macOS and ARM64 Linux builds.
 - Multiple RC instances, shared across windows or accounts.
 - Encrypted remotes (crypt) wizard.
+- Translations: the strings module is ready for them, but only English ships.
