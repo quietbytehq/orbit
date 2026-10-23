@@ -7,6 +7,59 @@ Orbit ships its own rclone and runs it as a background daemon (`rclone rcd`) on 
 - **Platforms:** Linux (AppImage, `.deb`) and Windows (`.msi`).
 - **Stack:** Tauri 2 (Rust), SvelteKit in SPA mode, TypeScript.
 - **Design:** see [SPEC.md](SPEC.md). Contributor rules are in [CLAUDE.md](CLAUDE.md).
+- **Changes:** see [CHANGELOG.md](CHANGELOG.md). Licence: [MIT](LICENSE).
+
+## Screenshots
+
+Images go in `docs/screenshots/` (see the [list of expected files](docs/screenshots/README.md)).
+
+| | |
+|---|---|
+| ![Overview](docs/screenshots/overview.png) <br> *Overview* | ![Cloud storage](docs/screenshots/storage.png) <br> *Cloud storage* |
+| ![File browser](docs/screenshots/browse.png) <br> *File browser* | ![Backup & sync](docs/screenshots/backup.png) <br> *Backup & sync* |
+| ![Drives](docs/screenshots/drives.png) <br> *Drives (Windows) / Folders (Linux)* | ![Settings](docs/screenshots/settings.png) <br> *Settings* |
+
+## Install
+
+Download the file for your system from the [latest release](https://github.com/quietbytehq/orbit/releases/latest).
+The releases are not code-signed yet, so both Windows and some Linux desktops will ask you to confirm.
+
+### Linux: AppImage
+
+```bash
+chmod +x orbit_0.2.0_amd64.AppImage
+./orbit_0.2.0_amd64.AppImage
+```
+
+Needs a 64-bit x86 system with WebKitGTK 4.1 (Ubuntu 22.04 or newer, Fedora 37 or newer, and
+similar). AppImages mount themselves with FUSE 2; if your system has only FUSE 3 and the file
+refuses to start, run it with `--appimage-extract-and-run`. To show cloud storage as a folder,
+install FUSE 3 (`sudo apt install fuse3` on Debian and Ubuntu); Orbit tells you if it is missing.
+
+### Linux: Debian and Ubuntu package
+
+```bash
+sudo apt install ./orbit_0.2.0_amd64.deb
+```
+
+This pulls in WebKitGTK and the tray library. Orbit then appears in your application menu as
+"Orbit for rclone". Install `fuse3` as above to use folders.
+
+### Windows: installer
+
+Run `orbit_0.2.0_x64_en-US.msi`. Windows 10 or 11, 64-bit; WebView2 is already present on current
+systems. Because the installer is not signed, SmartScreen may show "Windows protected your PC":
+click **More info**, then **Run anyway**. Orbit installs per machine and adds a Start menu entry.
+
+**Drives need WinFsp.** To show cloud storage as a drive letter in File Explorer, install
+[WinFsp](https://winfsp.dev/rel/) (free, one minute). Orbit does not bundle it; the Drives page
+prompts for it with a download button and a "Check again" button once it is installed. Everything
+else (browsing, transfers, backups) works without it.
+
+### Updating
+
+Install the new file over the old one. Settings, backups, remembered drives and the rclone config
+stay in the app data folder (see *Where your data lives*).
 
 ## What works (v0.2)
 
@@ -29,11 +82,11 @@ Orbit ships its own rclone and runs it as a background daemon (`rclone rcd`) on 
 | Packaging: AppImage and `.deb`, named `orbit_<version>_…` | Built in CI on every push |
 | Packaging: `.msi`, named `orbit_<version>_…` | Built in CI on Windows on every push; not installed on a real machine |
 
-Out of scope for v0.1 (see SPEC §9): cron-style schedules and missed-run catch-up, bisync, conflict handling, the advanced remote editor, auto-update, macOS.
+Out of scope for v0.2 (see SPEC §9): cron-style schedules and missed-run catch-up, bisync, conflict handling, the advanced remote editor, auto-update, macOS.
 
 ## Not verified yet
 
-Please read this before relying on v0.1:
+Please read this before relying on v0.2:
 
 - **Real cloud accounts.** Google Drive, OneDrive and Dropbox sign-in was not completed against live accounts, since none were available. The flow was tested up to rclone's local callback: a bogus code makes rclone report the failure, the call returns, and no stub remote is left behind. S3 and SFTP were tested for their parameter handling and their failure messages, not against live servers.
 - **Windows at runtime.** The Rust tests (including the integration tests against a real rclone, the kill-on-close job object and the no-console spawn path) run on Windows in CI and pass, and the `.msi` builds there. The app itself has not been launched on a Windows desktop: the tray, windows, WinFsp mounting, start-at-sign-in and the installer are unverified by eye.
@@ -126,7 +179,14 @@ Everything is under the Tauri app data folder: `~/.local/share/com.orbit.rclone`
 - The rclone that ships with Orbit is what it runs by default. If you choose a custom rclone, a snap-packaged build may not be able to write to the app data folder.
 - The WinFsp installer is not bundled. See SPEC §6.
 
-## Third-party
+## Releases
+
+Every push runs CI (tests on Linux, bundles on Linux and Windows). Pushing a tag `v*` additionally
+creates a GitHub Release with the AppImage, `.deb` and `.msi` attached, once the test job is green.
+
+## Licence and third-party
+
+Orbit is released under the [MIT licence](LICENSE), copyright Quietbyte.
 
 - [rclone](https://rclone.org), MIT licence, bundled as a sidecar binary.
 - [Inter](https://rsms.me/inter/) typeface, SIL Open Font License 1.1, bundled in `static/fonts/` with its licence file.

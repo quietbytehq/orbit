@@ -5,10 +5,14 @@
 # bundle-linux:   Linux. AppImage and .deb, uploaded as artifacts.
 # bundle-windows: Windows. .msi, uploaded as an artifact. Also runs the Rust tests and reports
 #                 the per-test results in the job summary without failing the job.
+# release:        Only for a pushed tag v*. Creates the GitHub Release and attaches the AppImage,
+#                 .deb and .msi from the bundle jobs, once the check job is green.
 name: CI
 
 on:
   push:
+    branches: ["**"]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -205,3 +209,32 @@ jobs:
           name: rust-tests-windows-log
           path: rust-tests-windows.log
           if-no-files-found: ignore
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [check, bundle-linux, bundle-windows]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: orbit-*
+          path: dist
+          merge-multiple: true
+
+      - name: List release files
+        run: find dist -type f | sort
+
+      - name: Create the release and attach the bundles
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Orbit ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/**/*.AppImage
+            dist/**/*.deb
+            dist/**/*.msi
