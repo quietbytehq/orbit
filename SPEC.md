@@ -97,7 +97,10 @@ The same colors are used for the tray icons and for the status badges on remotes
 
 ### 3.3 Icons
 
-- App icon: `assets/orbit-icon.png` (1024×1024), generated into `src-tauri/icons/` with `tauri icon`.
+- App icon: `assets/orbit-icon.png` (1024×1024): a squircle on a fully transparent background, with
+  no rim or glow outside the shape, so it sits cleanly on dark panels. Generated into
+  `src-tauri/icons/` with `tauri icon`; the Android and iOS folders it also writes are not kept.
+  `static/favicon.png` is the 64 px rendering, used in the sidebar.
 - Tray icons: `assets/tray-icons-v2/`. Variants `white` (for dark system theme) and `dark` (for light
   system theme), states `base`, `synced`, `syncing`, `disconnected`. Sizes 16, 20, 22, 24, 32, 48,
   64, 256, plus a multi-size `.ico` per variant and state for Windows. The generator is `gen.py`.
