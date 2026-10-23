@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "$lib/api";
-  import { FADE_OUT_MS, PHASES, REDUCED_HOLD_MS, SPLASH_MS, phaseTiming } from "$lib/splash/timeline";
+  import { FADE_OUT_MS, REDUCED_HOLD_MS, phaseTiming, timeline, type Timeline } from "$lib/splash/timeline";
   import { applyTheme } from "$lib/util/theme";
 
   // Geometry matches assets/tray-icons-v2/gen.py so the splash echoes the app icon.
@@ -10,7 +10,6 @@
   const RX = 118;
   const RY = 34;
   const ROT = -20;
-  const ORBIT_MS = 3200;
   const START_ANGLE = 200;
 
   let satellite = $state({ x: 0, y: 0 });
@@ -18,12 +17,14 @@
   /** True once the content is fading to the background. */
   let leaving = $state(false);
   let finished = false;
+  /** Which version plays. Set once the backend has answered; nothing animates before that. */
+  let line = $state<Timeline | null>(null);
 
-  const [ringDelay, ringDuration] = phaseTiming("ring");
-  const [cloudDelay, cloudDuration] = phaseTiming("cloud");
-  const [wordDelay, wordDuration] = phaseTiming("wordmark");
-  const [taglineDelay, taglineDuration] = phaseTiming("tagline");
-  const [footerDelay, footerDuration] = phaseTiming("footer");
+  const ringTiming = $derived(line ? phaseTiming(line, "ring") : [0, 0]);
+  const cloudTiming = $derived(line ? phaseTiming(line, "cloud") : [0, 0]);
+  const wordTiming = $derived(line ? phaseTiming(line, "wordmark") : [0, 0]);
+  const taglineTiming = $derived(line ? phaseTiming(line, "tagline") : [0, 0]);
+  const footerTiming = $derived(line ? phaseTiming(line, "footer") : [0, 0]);
 
   function pointAt(angleDeg: number) {
     const t = (angleDeg * Math.PI) / 180;
@@ -59,20 +60,32 @@
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     still = reduced;
-    const timer = window.setTimeout(finish, reduced ? REDUCED_HOLD_MS : SPLASH_MS);
-
+    let timer = 0;
     let frame = 0;
-    if (reduced) {
-      satellite = pointAt(START_ANGLE);
-    } else {
-      const started = performance.now();
-      const tick = (now: number) => {
-        const angle = START_ANGLE + ((now - started) / ORBIT_MS) * 360;
-        satellite = pointAt(angle);
-        frame = requestAnimationFrame(tick);
-      };
-      frame = requestAnimationFrame(tick);
-    }
+
+    // The backend decides between the full and the short intro. In a plain browser there is no
+    // backend, so the full one plays.
+    void api
+      .getSplashPlan()
+      .then((plan) => (plan === "short" ? "short" : "full"))
+      .catch(() => "full" as const)
+      .then((version) => {
+        if (finished) return;
+        line = timeline(version);
+        timer = window.setTimeout(finish, reduced ? REDUCED_HOLD_MS : line.sequenceMs);
+        if (reduced) {
+          satellite = pointAt(START_ANGLE);
+        } else {
+          const started = performance.now();
+          const orbitMs = line.orbitMs;
+          const tick = (now: number) => {
+            const angle = START_ANGLE + ((now - started) / orbitMs) * 360;
+            satellite = pointAt(angle);
+            frame = requestAnimationFrame(tick);
+          };
+          frame = requestAnimationFrame(tick);
+        }
+      });
 
     return () => {
       window.clearTimeout(timer);
@@ -105,7 +118,7 @@
     void finish();
   }}
 >
-  <div class="content" style:transition-duration="{FADE_OUT_MS}ms">
+  <div class="content" class:ready={line !== null} style:transition-duration="{FADE_OUT_MS}ms">
     <svg viewBox="0 0 256 256" class="mark" aria-hidden="true">
       <ellipse
         class="ring"
@@ -115,10 +128,10 @@
         ry={RY}
         transform="rotate({ROT} {CX} {CY})"
         pathLength="1"
-        style:animation-delay="{ringDelay}ms"
-        style:animation-duration="{ringDuration}ms"
+        style:animation-delay="{ringTiming[0]}ms"
+        style:animation-duration="{ringTiming[1]}ms"
       />
-      <g class="cloud" style:animation-delay="{cloudDelay}ms" style:animation-duration="{cloudDuration}ms">
+      <g class="cloud" style:animation-delay="{cloudTiming[0]}ms" style:animation-duration="{cloudTiming[1]}ms">
         <circle cx="70" cy="146" r="30" />
         <circle cx="116" cy="112" r="44" />
         <circle cx="168" cy="124" r="36" />
@@ -128,12 +141,12 @@
       <circle class="satellite" cx={satellite.x} cy={satellite.y} r="11" />
     </svg>
 
-    <p class="wordmark" style:animation-delay="{wordDelay}ms" style:animation-duration="{wordDuration}ms">Orbit</p>
-    <p class="tagline" style:animation-delay="{taglineDelay}ms" style:animation-duration="{taglineDuration}ms">
+    <p class="wordmark" style:animation-delay="{wordTiming[0]}ms" style:animation-duration="{wordTiming[1]}ms">Orbit</p>
+    <p class="tagline" style:animation-delay="{taglineTiming[0]}ms" style:animation-duration="{taglineTiming[1]}ms">
       All your clouds, in one orbit.
     </p>
-    <p class="footer" style:animation-delay="{footerDelay}ms" style:animation-duration="{footerDuration}ms">
-      Powered by rclone · v0.1
+    <p class="footer" style:animation-delay="{footerTiming[0]}ms" style:animation-duration="{footerTiming[1]}ms">
+      Powered by rclone · v0.2
     </p>
   </div>
 </div>
@@ -174,6 +187,10 @@
   }
   .splash.leaving .content {
     opacity: 0;
+  }
+  /* Nothing animates until the backend has said which version plays. */
+  .content:not(.ready) * {
+    animation-play-state: paused;
   }
   .mark {
     width: 180px;

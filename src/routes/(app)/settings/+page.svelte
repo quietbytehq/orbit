@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { open } from "@tauri-apps/plugin-dialog";
   import { errorMessage } from "$lib/api";
-  import type { RcloneLogLevel, Settings, Theme } from "$lib/api/types";
+  import type { RcloneLogLevel, Settings, SplashMode, Theme } from "$lib/api/types";
   import { rcd } from "$lib/stores/rcd.svelte";
   import { settings } from "$lib/stores/settings.svelte";
 
@@ -31,6 +31,12 @@
     { value: "system", label: "Match the system" },
     { value: "light", label: "Light" },
     { value: "dark", label: "Dark" },
+  ];
+
+  const SPLASH_MODES: { value: SplashMode; label: string; help: string }[] = [
+    { value: "full", label: "Full", help: "The whole intro, about 5 seconds, every time." },
+    { value: "short", label: "Short", help: "A quick version. The full intro still plays once after an install or update." },
+    { value: "off", label: "Off", help: "Open the main window straight away." },
   ];
 
   const LOG_LEVELS: { value: RcloneLogLevel; label: string }[] = [
@@ -114,13 +120,16 @@
 
   <section class="card">
     <h2>Startup</h2>
-    <label class="row">
-      <span>
-        <span class="title">Show the intro animation</span>
-        <span class="help">Applies the next time Orbit starts. Click or press a key during the intro to skip it.</span>
-      </span>
-      <input type="checkbox" checked={current.splashEnabled} onchange={(event) => update({ splashEnabled: event.currentTarget.checked })} />
-    </label>
+    <fieldset>
+      <legend class="title">Intro animation</legend>
+      <p class="help">Applies the next time Orbit starts. Click or press a key during the intro to skip it.</p>
+      {#each SPLASH_MODES as option (option.value)}
+        <label class="option">
+          <input type="radio" name="splash" value={option.value} checked={current.splash === option.value} onchange={() => update({ splash: option.value })} />
+          <span>{option.label} <span class="help inline">{option.help}</span></span>
+        </label>
+      {/each}
+    </fieldset>
   </section>
 {:else}
   <p class="help">Loading settings…</p>
@@ -175,6 +184,10 @@
     color: var(--text-secondary);
     font-size: 12px;
     margin: 0;
+  }
+  .help.inline {
+    display: inline;
+    margin-left: 6px;
   }
   .path {
     font-size: 12px;

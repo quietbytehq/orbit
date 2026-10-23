@@ -29,6 +29,12 @@ pub fn splash_finished(app: AppHandle, reveal: State<'_, RevealState>) {
     }
 }
 
+/// Which intro the splash window plays this launch, decided once at startup.
+#[tauri::command]
+pub fn get_splash_plan(plan: State<'_, settings::SplashPlan>) -> settings::SplashPlan {
+    *plan.inner()
+}
+
 #[tauri::command]
 pub fn get_settings(store: State<'_, SettingsStore>) -> Settings {
     store.get()

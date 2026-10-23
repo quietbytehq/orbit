@@ -16,6 +16,7 @@ import type {
   RemoteForm,
   RemoteSummary,
   Settings,
+  SplashPlan,
   TransferItem,
   TransferRequest,
 } from "./types";
@@ -32,6 +33,7 @@ export const api = {
   getRcdState: () => invoke<RcdState>("get_rcd_state"),
   restartRcd: () => invoke<void>("restart_rcd"),
   splashFinished: () => invoke<void>("splash_finished"),
+  getSplashPlan: () => invoke<SplashPlan>("get_splash_plan"),
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<Settings>("save_settings", { settings }),
 

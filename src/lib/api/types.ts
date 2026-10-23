@@ -249,11 +249,19 @@ export type Theme = "system" | "light" | "dark";
 /** Mirrors `settings::LogLevel`. */
 export type RcloneLogLevel = "ERROR" | "NOTICE" | "INFO" | "DEBUG";
 
+/** Mirrors `settings::SplashMode`. */
+export type SplashMode = "full" | "short" | "off";
+
+/** Mirrors `settings::SplashPlan`: what the splash window plays this launch. */
+export type SplashPlan = "full" | "short" | "off";
+
 /** Mirrors `settings::Settings`. Holds no credentials. */
 export interface Settings {
   theme: Theme;
   transferConcurrency: number;
   rclonePath: string | null;
   rcloneLogLevel: RcloneLogLevel;
-  splashEnabled: boolean;
+  splash: SplashMode;
+  /** App version that last played the full intro. Managed by the backend. */
+  lastSplashVersion: string | null;
 }

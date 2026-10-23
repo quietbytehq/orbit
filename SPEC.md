@@ -109,19 +109,26 @@ The same colors are used for the tray icons and for the status badges on remotes
 ### 3.4 Splash
 
 - Shown in its own borderless window (360×360), on a light or dark gradient matching the system theme.
-- Sequence over 3.5 s (timings in `src/lib/splash/timeline.ts`):
-  - 0.0–1.2 s: the orbit ring draws itself and satellites start orbiting.
-  - 1.2–1.8 s: the cloud fades and scales in at the centre.
-  - 1.8–2.4 s: the "Orbit" wordmark fades up below the icon.
-  - 2.4–3.0 s: the tagline "All your clouds, in one orbit." fades in.
-  - 3.0–3.5 s: "Powered by rclone · v0.1" appears at the bottom.
-  - 3.5–3.8 s: the content fades to the splash background, then the splash finishes and its
-    window closes, so the cut to the main window is soft.
+- Two versions of the same sequence, scaled proportionally from a 3.5 s base (timings in
+  `src/lib/splash/timeline.ts`):
+  - **Full**, about 5.5 s: plays on the first launch after an install or an update (the backend
+    compares `lastSplashVersion` in `settings.json` with the app version and updates it).
+  - **Short**, 1.5 s: every other launch.
+  - Base phases, in order: the orbit ring draws itself and satellites start orbiting; the cloud
+    fades and scales in at the centre; the "Orbit" wordmark fades up; the tagline "All your clouds,
+    in one orbit." fades in; "Powered by rclone · v0.2" appears at the bottom.
+  - After the sequence, the content fades to the splash background over 0.3 s, then the splash
+    finishes and its window closes, so the cut to the main window is soft.
+- Setting "Intro animation": **Full** (always the full version), **Short** (default: short, with
+  the full one once per version as above), **Off** (no splash window). v0.1's `splashEnabled: false`
+  loads as Off.
+- The splash window asks the backend which version to play (`get_splash_plan`); nothing animates
+  before the answer.
 - Text is white on dark and dark on light. Easing is ease-out only, so nothing bounces.
 - Skippable by click or any key press. A skip runs the same 0.3 s fade-out first.
 - Reduced motion: no animation and no fade. The final frame is shown for 1.5 s, then the splash
   finishes.
-- The main window opens once the splash has finished and rclone has settled. Settings can turn the splash off; the change applies at the next launch.
+- The main window opens once the splash has finished and rclone has settled.
 
 ## 4. Features for v0.1
 
@@ -230,7 +237,7 @@ Per-remote badge:
 - Appearance: system, light, dark.
 - Transfers: concurrent transfers (1–8, default 3).
 - rclone: path override (advanced), log level (`ERROR`, `NOTICE`, `INFO`, `DEBUG`).
-- Splash: enabled or disabled (default enabled).
+- Splash: full, short, or off (default short; see §3.4).
 - Settings are stored in `settings.json`. Changes apply immediately, except rclone path and log
   level, which restart rcd.
 

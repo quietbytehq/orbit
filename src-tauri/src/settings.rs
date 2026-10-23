@@ -14,7 +14,43 @@ pub struct Settings {
     /// Advanced: use this rclone binary instead of the bundled one.
     pub rclone_path: Option<PathBuf>,
     pub rclone_log_level: LogLevel,
-    pub splash_enabled: bool,
+    /// Which intro plays at launch. The first launch after an install or an update always plays
+    /// the full one unless the splash is off.
+    pub splash: SplashMode,
+    /// App version that last played the full intro. `None` until the first launch.
+    pub last_splash_version: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SplashMode {
+    Full,
+    Short,
+    Off,
+}
+
+/// What the splash window should play this launch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SplashPlan {
+    Full,
+    Short,
+    Off,
+}
+
+impl Settings {
+    /// Decides this launch's intro. The full one plays when the setting says so, or on the first
+    /// launch of a new version (first install or an update); otherwise the short one, or none.
+    pub fn splash_plan(&self, app_version: &str) -> SplashPlan {
+        match self.splash {
+            SplashMode::Off => SplashPlan::Off,
+            SplashMode::Full => SplashPlan::Full,
+            SplashMode::Short if self.last_splash_version.as_deref() != Some(app_version) => {
+                SplashPlan::Full
+            }
+            SplashMode::Short => SplashPlan::Short,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,7 +88,8 @@ impl Default for Settings {
             transfer_concurrency: 3,
             rclone_path: None,
             rclone_log_level: LogLevel::Info,
-            splash_enabled: true,
+            splash: SplashMode::Short,
+            last_splash_version: None,
         }
     }
 }
@@ -89,13 +126,25 @@ impl SettingsStore {
     }
 }
 
-/// Loads settings from `path`. A missing file yields the defaults.
+/// Loads settings from `path`. A missing file yields the defaults. Files written by v0.1 carry
+/// `splashEnabled` instead of `splash`; `false` becomes `off`, `true` the default.
 pub fn load(path: &Path) -> AppResult<Settings> {
     match fs::read_to_string(path) {
-        Ok(text) => Ok(serde_json::from_str(&text)?),
+        Ok(text) => parse(&text),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Settings::default()),
         Err(err) => Err(err.into()),
     }
+}
+
+fn parse(text: &str) -> AppResult<Settings> {
+    let value: serde_json::Value = serde_json::from_str(text)?;
+    let legacy_off = value.get("splash").is_none()
+        && value.get("splashEnabled").and_then(|v| v.as_bool()) == Some(false);
+    let mut settings: Settings = serde_json::from_value(value)?;
+    if legacy_off {
+        settings.splash = SplashMode::Off;
+    }
+    Ok(settings)
 }
 
 /// Writes settings atomically: a temp file is written, then renamed over `path`.
@@ -130,7 +179,8 @@ mod tests {
             transfer_concurrency: 5,
             rclone_path: Some(PathBuf::from("/opt/rclone")),
             rclone_log_level: LogLevel::Debug,
-            splash_enabled: false,
+            splash: SplashMode::Off,
+            last_splash_version: Some("0.2.0".into()),
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path).unwrap(), settings);
@@ -155,5 +205,32 @@ mod tests {
         let loaded = load(&path).unwrap();
         assert_eq!(loaded.theme, Theme::Dark);
         assert_eq!(loaded.transfer_concurrency, 3);
+    }
+
+    #[test]
+    fn v0_1_splash_flag_is_migrated() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        fs::write(&path, r#"{"splashEnabled":false}"#).unwrap();
+        assert_eq!(load(&path).unwrap().splash, SplashMode::Off);
+        fs::write(&path, r#"{"splashEnabled":true}"#).unwrap();
+        assert_eq!(load(&path).unwrap().splash, SplashMode::Short);
+        // A file that already has the new field wins over the old flag.
+        fs::write(&path, r#"{"splashEnabled":false,"splash":"full"}"#).unwrap();
+        assert_eq!(load(&path).unwrap().splash, SplashMode::Full);
+    }
+
+    #[test]
+    fn full_intro_plays_on_first_launch_and_after_an_update() {
+        let mut settings = Settings::default();
+        assert_eq!(settings.splash_plan("0.2.0"), SplashPlan::Full, "first launch");
+        settings.last_splash_version = Some("0.2.0".into());
+        assert_eq!(settings.splash_plan("0.2.0"), SplashPlan::Short, "ordinary launch");
+        assert_eq!(settings.splash_plan("0.3.0"), SplashPlan::Full, "after an update");
+        settings.splash = SplashMode::Full;
+        assert_eq!(settings.splash_plan("0.2.0"), SplashPlan::Full);
+        settings.splash = SplashMode::Off;
+        settings.last_splash_version = None;
+        assert_eq!(settings.splash_plan("0.2.0"), SplashPlan::Off, "off stays off");
     }
 }

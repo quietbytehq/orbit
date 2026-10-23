@@ -75,20 +75,30 @@ pub fn run() {
             let paths = AppPaths::new(&data_dir);
             std::fs::create_dir_all(paths.logs_dir())?;
 
-            let settings = settings::load(&paths.settings()).unwrap_or_else(|err| {
+            let mut settings = settings::load(&paths.settings()).unwrap_or_else(|err| {
                 eprintln!("Orbit: could not read settings, using defaults: {err}");
                 settings::Settings::default()
             });
             let spec = rclone::spec_for(&paths, &settings);
-            if !settings.splash_enabled
+            let app_version = app.package_info().version.to_string();
+            let splash_plan = settings.splash_plan(&app_version);
+            if splash_plan == settings::SplashPlan::Full {
+                // Remember that this version has shown its full intro, so the next launch is short.
+                settings.last_splash_version = Some(app_version);
+                if let Err(err) = settings::save(&paths.settings(), &settings) {
+                    eprintln!("Orbit: could not save settings: {err}");
+                }
+            }
+            if splash_plan == settings::SplashPlan::Off
                 && let Some(splash) = app.get_webview_window("splash")
             {
                 let _ = splash.close();
             }
+            app.manage(splash_plan);
             app.manage(SettingsStore::new(settings.clone()));
 
             app.manage(RevealState(Mutex::new(RevealGate::new(
-                settings.splash_enabled,
+                splash_plan != settings::SplashPlan::Off,
             ))));
             app.manage(HealthStore::default());
             app.manage(TrayHandle::empty());
@@ -143,6 +153,7 @@ pub fn run() {
             commands::get_rcd_state,
             commands::restart_rcd,
             commands::splash_finished,
+            commands::get_splash_plan,
             remotes::commands::list_providers,
             remotes::commands::list_remotes,
             remotes::commands::get_remote_form,
