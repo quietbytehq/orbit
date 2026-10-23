@@ -8,6 +8,7 @@ const base: RemoteSummary = {
   providerId: "drive",
   providerTitle: "Google Drive",
   health: { state: "unknown" },
+  startPath: "",
 };
 
 const noneInUse = new Set<string>();

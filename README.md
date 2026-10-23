@@ -15,7 +15,7 @@ Orbit ships its own rclone and runs it as a background daemon (`rclone rcd`) on 
 | rclone lifecycle: start, health check, restart with backoff, clean stop, no orphan on crash | Done, tested with a real rclone |
 | Tray with synced, syncing and disconnected icons; white or dark set by system theme | Done (Linux run; Windows icons compile-checked only) |
 | Splash animation (about 1.5 s, skippable, reduced-motion aware) and reveal of the main window | Done; visual timing not reviewed by eye |
-| Remote wizards: Google Drive, OneDrive, Dropbox (browser sign-in), S3-compatible, SFTP | Done. Browser sign-in is tested up to the callback only, see below |
+| Remote wizards: Google Drive, OneDrive, Dropbox (browser sign-in), S3-compatible, SFTP, network shares (SMB) | Done. Browser sign-in is tested up to the callback only, see below. SMB is tested for parameter handling and failure messages, not against a live server |
 | Connection test, edit, rename, delete, status badges (up to date, syncing, disconnected) | Done |
 | File browser: list, folders, multi-select, new folder, rename, delete | Done, tested with rclone's `alias` backend |
 | Upload (picker or drag and drop), download, copy and move between remotes | Done, tested |

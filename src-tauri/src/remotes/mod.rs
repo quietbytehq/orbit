@@ -22,6 +22,9 @@ pub struct RemoteSummary {
     pub provider_id: Option<String>,
     pub provider_title: String,
     pub health: RemoteHealth,
+    /// Folder to open first (for example the share of a network share). "" for the root.
+    #[serde(default)]
+    pub start_path: String,
 }
 
 /// A remote's non-secret settings, for the edit form.

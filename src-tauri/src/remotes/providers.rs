@@ -192,6 +192,59 @@ const SFTP_FIELDS: &[FieldDef] = &[
     },
 ];
 
+/// Fields for a Windows or Samba network share. `share` is not an rclone option: Orbit stores it
+/// with the connection and uses it for the connection check and as the folder to open first.
+const SMB_FIELDS: &[FieldDef] = &[
+    FieldDef {
+        key: "host",
+        label: "Server name or IP address",
+        help: "The computer or NAS that shares the folder, such as NAS or 192.168.1.20.",
+        kind: FieldKind::Text,
+        required: true,
+        default: None,
+    },
+    FieldDef {
+        key: "share",
+        label: "Share name",
+        help: "The shared folder's name, as in \\\\server\\share. Leave empty to see every share.",
+        kind: FieldKind::Text,
+        required: false,
+        default: None,
+    },
+    FieldDef {
+        key: "user",
+        label: "Username",
+        help: "The account that is allowed to open the share. Leave empty for a share that needs no sign-in.",
+        kind: FieldKind::Text,
+        required: false,
+        default: None,
+    },
+    FieldDef {
+        key: "pass",
+        label: "Password",
+        help: "Kept by Orbit's engine and never shown again.",
+        kind: FieldKind::Secret,
+        required: false,
+        default: None,
+    },
+    FieldDef {
+        key: "domain",
+        label: "Domain",
+        help: "Optional. Only needed on a work network that uses one.",
+        kind: FieldKind::Text,
+        required: false,
+        default: None,
+    },
+    FieldDef {
+        key: "port",
+        label: "Port",
+        help: "Usually 445.",
+        kind: FieldKind::Number { min: 1, max: 65535 },
+        required: true,
+        default: Some("445"),
+    },
+];
+
 pub const PROVIDERS: &[ProviderDef] = &[
     ProviderDef {
         id: "drive",
@@ -233,7 +286,27 @@ pub const PROVIDERS: &[ProviderDef] = &[
         auth: AuthKind::Credentials,
         fields: SFTP_FIELDS,
     },
+    ProviderDef {
+        id: "smb",
+        title: "Network share (Windows/Samba)",
+        rclone_type: "smb",
+        tagline: "A shared folder on another computer or a NAS on your home or work network.",
+        auth: AuthKind::Credentials,
+        fields: SMB_FIELDS,
+    },
 ];
+
+/// The folder a connection opens at first: the share for a network share, the root otherwise.
+/// `values` are the connection's stored parameters.
+pub fn start_path(provider: &ProviderDef, values: &BTreeMap<String, String>) -> String {
+    match provider.id {
+        "smb" => values
+            .get("share")
+            .map(|share| share.trim().trim_matches('/').to_owned())
+            .unwrap_or_default(),
+        _ => String::new(),
+    }
+}
 
 pub fn all() -> &'static [ProviderDef] {
     PROVIDERS
@@ -380,6 +453,35 @@ mod tests {
         ids.dedup();
         assert_eq!(ids.len(), PROVIDERS.len());
         assert!(PROVIDERS.iter().all(|p| find(p.id).is_some()));
+    }
+
+    #[test]
+    fn smb_share_is_optional_and_becomes_the_start_path() {
+        let smb = find("smb").unwrap();
+        let params = build_parameters(
+            smb,
+            &values(&[
+                ("host", "nas"),
+                ("share", "Photos/"),
+                ("user", "ana"),
+                ("pass", "pw"),
+            ]),
+            None,
+        )
+        .unwrap();
+        assert_eq!(params["host"], "nas");
+        assert_eq!(params["port"], "445");
+        assert_eq!(params["share"], "Photos/");
+        assert_eq!(start_path(smb, &params), "Photos");
+        assert!(secret_keys(smb).any(|key| key == "pass"));
+
+        let guest = build_parameters(smb, &values(&[("host", "nas")]), None).unwrap();
+        assert!(!guest.contains_key("user"), "blank optionals are left out");
+        assert_eq!(start_path(smb, &guest), "");
+        assert!(
+            build_parameters(smb, &values(&[("share", "x")]), None).is_err(),
+            "host is required"
+        );
     }
 
     #[test]

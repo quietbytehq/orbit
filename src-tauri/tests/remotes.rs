@@ -215,6 +215,69 @@ async fn wait_for_url(urls: &Arc<Mutex<Vec<String>>>) -> String {
     }
 }
 
+#[tokio::test]
+async fn smb_share_is_stored_and_used_for_the_check() {
+    let dir = tempfile::tempdir().unwrap();
+    let Some(process) = start(dir.path()).await else {
+        return;
+    };
+    let client = process.client();
+    let closed_port = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.local_addr().unwrap().port()
+    };
+    let smb = orbit_lib::remotes::providers::find("smb").unwrap();
+    let params = orbit_lib::remotes::providers::build_parameters(
+        smb,
+        &params(&[
+            ("host", "127.0.0.1"),
+            ("share", "docs"),
+            ("user", "ana"),
+            ("pass", "hunter2"),
+            ("port", &closed_port.to_string()),
+        ]),
+        None,
+    )
+    .unwrap();
+    store::create(&client, "orbit-smb", "smb", &params)
+        .await
+        .unwrap();
+
+    let summary = store::list(&client)
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|r| r.name == "orbit-smb")
+        .unwrap();
+    assert_eq!(summary.provider_id.as_deref(), Some("smb"));
+    assert_eq!(summary.start_path, "docs", "the share is the start path");
+
+    let form = store::form(&client, "orbit-smb").await.unwrap();
+    assert_eq!(form.values.get("share").map(String::as_str), Some("docs"));
+    assert_eq!(
+        form.values.get("host").map(String::as_str),
+        Some("127.0.0.1")
+    );
+    assert!(
+        !form.values.contains_key("pass"),
+        "the password never comes back"
+    );
+    assert!(form.saved_secrets.contains(&"pass".to_owned()));
+
+    // Nothing listens on that port, so the check fails with a plain message and raw details.
+    let result = store::test(&client, "orbit-smb").await.unwrap();
+    assert!(!result.ok);
+    assert!(
+        !result.message.is_empty() && !result.message.to_lowercase().contains("rclone"),
+        "{}",
+        result.message
+    );
+    assert!(result.details.as_deref().is_some_and(|d| !d.is_empty()));
+
+    store::delete(&client, "orbit-smb").await.unwrap();
+    process.stop().await;
+}
+
 #[test]
 fn health_defaults_are_unknown() {
     let health = orbit_lib::remotes::health::HealthStore::default();

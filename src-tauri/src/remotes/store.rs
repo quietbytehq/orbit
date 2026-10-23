@@ -34,6 +34,9 @@ pub async fn list(client: &RcClient) -> AppResult<Vec<RemoteSummary>> {
                 .unwrap_or_else(|| rclone_type.clone()),
             rclone_type,
             health: super::health::RemoteHealth::Unknown,
+            start_path: provider
+                .map(|p| providers::start_path(p, &raw))
+                .unwrap_or_default(),
             name,
         });
     }
@@ -158,12 +161,19 @@ pub async fn rename(client: &RcClient, from: &str, to: &str) -> AppResult<()> {
     delete(client, from).await
 }
 
-/// Checks that a remote can be listed. Uses the remote root, which is cheap on every backend.
+/// Checks that a remote can be listed. Uses the remote root (or the network share's folder),
+/// which is cheap on every backend.
 pub async fn test(client: &RcClient, name: &str) -> AppResult<ConnectionTest> {
+    let raw = get_raw(client, name).await?;
+    let start = raw
+        .get("type")
+        .and_then(|t| providers::for_rclone_type(t))
+        .map(|p| providers::start_path(p, &raw))
+        .unwrap_or_default();
     let result = client
         .call_value_with_timeout(
             "operations/list",
-            &json!({ "fs": format!("{name}:"), "remote": "" }),
+            &json!({ "fs": format!("{name}:"), "remote": start }),
             TEST_TIMEOUT,
         )
         .await;

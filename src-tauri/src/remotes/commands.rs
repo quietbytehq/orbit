@@ -27,13 +27,18 @@ pub struct RemoteUpdate {
     pub values: BTreeMap<String, String>,
 }
 
-fn summary(provider: &ProviderDef, name: &str) -> RemoteSummary {
+fn summary(
+    provider: &ProviderDef,
+    name: &str,
+    values: &std::collections::BTreeMap<String, String>,
+) -> RemoteSummary {
     RemoteSummary {
         name: name.to_owned(),
         rclone_type: provider.rclone_type.to_owned(),
         provider_id: Some(provider.id.to_owned()),
         provider_title: provider.title.to_owned(),
         health: RemoteHealth::Unknown,
+        start_path: providers::start_path(provider, values),
     }
 }
 
@@ -91,7 +96,7 @@ pub async fn create_remote(
     ensure_name_free(&client, &name).await?;
     store::create(&client, &name, provider.rclone_type, &params).await?;
     health.forget(&name);
-    Ok(summary(provider, &name))
+    Ok(summary(provider, &name, &params))
 }
 
 /// Runs rclone's browser sign-in for a Google Drive, OneDrive or Dropbox remote.
@@ -117,7 +122,7 @@ pub async fn start_browser_sign_in(
     })
     .await?;
     health.forget(&name);
-    Ok(summary(provider, &name))
+    Ok(summary(provider, &name, &std::collections::BTreeMap::new()))
 }
 
 #[tauri::command]

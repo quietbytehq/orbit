@@ -74,6 +74,8 @@ export interface RemoteSummary {
   providerId: string | null;
   providerTitle: string;
   health: RemoteHealth;
+  /** Folder to open first (the share of a network share). "" for the root. */
+  startPath: string;
 }
 
 /** Mirrors `remotes::RemoteForm`. Secret values are never included. */

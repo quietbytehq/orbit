@@ -98,7 +98,7 @@
           <button class="button" onclick={() => test(remote.name)} disabled={testing[remote.name]}>
             {testing[remote.name] ? text.s.storage.checking : text.s.storage.check}
           </button>
-          <a class="button" href={`/browse/${encodeURIComponent(remote.name)}`}>{text.s.storage.open}</a>
+          <a class="button" href={`/browse/${encodeURIComponent(remote.name)}${remote.startPath ? `?path=${encodeURIComponent(remote.startPath)}` : ""}`}>{text.s.storage.open}</a>
           <a class="button" href={`/remotes/${encodeURIComponent(remote.name)}`}>{text.s.storage.edit}</a>
         </div>
       </li>

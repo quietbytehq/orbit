@@ -162,6 +162,7 @@ Supported provider wizards:
 | Dropbox         | `dropbox`   | OAuth                        |
 | S3-compatible   | `s3`        | Access key and secret; provider preset (AWS, MinIO, Wasabi, Cloudflare R2, Backblaze B2, Other) |
 | SFTP            | `sftp`      | Host, port, user, password or key file |
+| Network share (Windows/Samba) | `smb` | Server name or IP, share name (optional), username, password, domain (optional), port |
 
 Wizard rules:
 - Each wizard is a short sequence of steps written in plain language ("Name this connection",
@@ -172,6 +173,10 @@ Wizard rules:
 - The last step runs a connection test (`operations/list` on the remote root, with a 20 s timeout)
   and shows a friendly result. A failed test offers "Edit" and "Save anyway".
 - Remote names are unique and validated (letters, digits, dashes, underscores; max 40 characters).
+- Network shares: the share name is not an rclone option. Orbit stores it with the connection
+  (`share` key) and uses it as the connection's start path: the connection test lists that share,
+  and "Open" starts there; without it the root lists every share on the server.
+  `RemoteSummary.start_path` carries this to the UI.
 
 Remote management: list, rename (copy config then delete old), edit parameters, delete (with
 confirmation). Delete removes only the rclone config section.
