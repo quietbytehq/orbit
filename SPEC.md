@@ -185,7 +185,10 @@ confirmation). Delete removes only the rclone config section.
 
 - Sidebar lists remotes with status badges. Clicking one opens its root.
 - Breadcrumb navigation, back and forward, and a path field.
-- Listing via `operations/list` (folders first, then name). Columns: name, size, modified.
+- Listing via `operations/list` (folders first, then name). Columns: name, modified, size. A file
+  whose size rclone reports as −1 (documents made in the cloud, such as Google Docs, which are
+  stored as live documents rather than files) shows "—" with a tooltip saying so; folders show "—"
+  with no tooltip. Ordinary files always show a size.
 - Actions: upload (file picker, or drag and drop onto the list), download (folder picker), copy,
   move (to another remote or folder), delete (to trash is not supported by all backends, so the
   confirmation says "permanently delete"), new folder, rename.
