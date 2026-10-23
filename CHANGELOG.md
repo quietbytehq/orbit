@@ -3,6 +3,24 @@
 All notable changes to Orbit for rclone. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-10-23
+
+### Fixed
+- Only one Orbit runs at a time. A second launch (by hand or from the start-at-sign-in entry)
+  hands over to the running one, which opens its window unless the launch was minimized, and
+  exits. Previously several copies could pile up with one tray icon each.
+- "Quit Orbit" in the tray now really quits: it asks for confirmation when a transfer or backup is
+  running, stops them, disconnects drives and folders, stops the storage engine, removes the tray
+  icon and ends the process, each step bounded by a timeout and the whole by a watchdog. Asking
+  the engine to quit no longer waits the full request timeout.
+- The tray menu always offers "Open Orbit" and "Quit Orbit".
+
+### Added
+- `orbit --quit` asks a running Orbit to quit without a prompt, for scripts.
+- A scripted Linux smoke test (`scripts/smoke-quit.sh`, run in CI under a virtual display) checks
+  single instance and clean quit end to end, and an integration test checks that quitting cancels
+  work, stops the engine and frees its port.
+
 ## [0.2.0] - 2026-10-23
 
 ### Added
@@ -60,5 +78,6 @@ Initial release.
 - Settings: theme, concurrent transfers, custom rclone path, log level, splash on or off.
 - Packaging as AppImage and .deb on Linux and .msi on Windows.
 
+[0.2.1]: https://github.com/quietbytehq/orbit/releases/tag/v0.2.1
 [0.2.0]: https://github.com/quietbytehq/orbit/releases/tag/v0.2.0
 [0.1.0]: https://github.com/quietbytehq/orbit/releases/tag/v0.1.0
