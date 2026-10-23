@@ -58,6 +58,9 @@ npm run tauri build -- --bundles appimage,deb
 
 ## Git
 
-- Local git only. Do not push, do not add remotes, do not open PRs.
+- Work on a branch (`dev/<topic>`), never directly on `main`. Push the branch when asked; do not
+  open PRs unless asked.
 - One commit per milestone plus fixes as needed. Messages are imperative, short subject line.
-- Commit trailer: `Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>`.
+- Commit trailer: the attribution lines Claude Code provides for the session (currently
+  `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>` plus a `Claude-Session:` link). Do not
+  hard-code a model name here; it changes between sessions.
