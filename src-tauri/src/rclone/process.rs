@@ -102,8 +102,11 @@ impl RcdProcess {
     /// Asks rclone to quit, then kills it if it is still running after a short grace period.
     pub async fn stop(mut self) {
         let client = self.client();
-        // Best effort: a dead process will not answer, and the kill below covers that.
-        let _ = client.call_value("core/quit", &json!({})).await;
+        // Best effort, and short: a dead or wedged process will not answer, and the kill below
+        // covers that. Waiting the full request timeout here would make quitting feel stuck.
+        let _ = client
+            .call_value_with_timeout("core/quit", &json!({}), QUIT_GRACE)
+            .await;
 
         let deadline = Instant::now() + QUIT_GRACE;
         while Instant::now() < deadline {

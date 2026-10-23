@@ -1,6 +1,6 @@
 [package]
 name = "orbit"
-version = "0.2.0"
+version = "0.2.1"
 description = "Orbit for rclone: a desktop app for cloud storage, backups and drives"
 authors = ["Orbit contributors"]
 edition = "2024"
@@ -24,6 +24,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2.8.3"
 tauri-plugin-autostart = "2.7"
+tauri-plugin-single-instance = "2.5"
 tokio = { version = "1.54.1", features = ["full"] }
 thiserror = "2.0.21"
 rand = "0.9"

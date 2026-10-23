@@ -20,6 +20,7 @@ pub struct Endpoint {
 pub struct RcClient {
     http: reqwest::Client,
     base_url: String,
+    port: u16,
     user: String,
     pass: String,
 }
@@ -42,9 +43,15 @@ impl RcClient {
                 .build()
                 .expect("reqwest client with default settings builds"),
             base_url: format!("http://127.0.0.1:{}", endpoint.port),
+            port: endpoint.port,
             user: endpoint.user.clone(),
             pass: endpoint.pass.clone(),
         }
+    }
+
+    /// Loopback port the engine listens on.
+    pub fn port(&self) -> u16 {
+        self.port
     }
 
     /// Calls an RC endpoint and returns the raw JSON response.

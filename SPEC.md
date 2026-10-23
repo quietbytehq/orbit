@@ -53,6 +53,17 @@ The frontend is SvelteKit running in SPA mode (adapter-static), which is Tauri's
   `PR_SET_PDEATHSIG`, so the kernel signals rcd when Orbit dies. Windows uses a job object with
   kill-on-close (section 6).
 - The token and port live in memory only. They are regenerated on every start.
+- Single instance (`tauri-plugin-single-instance`, registered before every other plugin): a
+  second launch hands its arguments to the running Orbit and exits. The running Orbit opens its
+  window, unless the launch carried `--minimized` (autostart while already open changes
+  nothing). `orbit --quit` asks the running Orbit to quit without a prompt; with no Orbit running
+  it exits at once.
+- Quitting (`quit` module), from the tray or `--quit`: if a transfer or backup is running, a
+  confirmation dialog ("Quit" / "Keep running"; `--quit` skips it). Then, once only: hide the
+  windows and remove the tray icon; cancel running transfers and backups and wait up to 5 s for
+  them to wind down; `mount/unmountall` with an 8 s limit; stop the engine (`core/quit` with a 3 s
+  limit, then kill); exit. A 25 s watchdog ends the process regardless. An exit that did not come
+  from Quit (the session ending) runs the same clean stop, bounded, from the exit event.
 
 ### 2.2 Credentials
 
@@ -241,7 +252,7 @@ Mounts:
 
 ### 4.4 Tray (M1)
 
-- Tray menu: "Show Orbit", "Sync status" (read only: last activity line), "Quit".
+- Tray menu, always present: "Open Orbit", a read-only status line, "Quit Orbit".
 - Icon state, computed from the status function in section 4.5:
   - `disconnected`: rcd not running or unhealthy.
   - `syncing`: at least one transfer or sync job is active.
@@ -326,7 +337,7 @@ Each milestone is committed to local git with a message describing it. Nothing i
   `rclone-<target-triple>` (`.exe` on Windows).
 - Linux: `tauri build --bundles appimage,deb`.
 - Windows: `tauri build --bundles msi`.
-- Version: Orbit 0.2.0. App identifier `com.orbit.rclone`.
+- Version: Orbit 0.2.1. App identifier `com.orbit.rclone`.
 - File names: the display name stays "Orbit for rclone" (window titles, Start menu, .desktop entry,
   installer), but bundle files are named `orbit_<version>_<arch>.AppImage`, `orbit_<version>_<arch>.deb`
   and `orbit_<version>_<arch>_<lang>.msi`. Tauri derives file names from the product name, so

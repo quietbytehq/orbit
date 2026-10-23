@@ -73,6 +73,48 @@ jobs:
       - name: Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --no-fail-fast
 
+  # Launches the real app twice under a virtual display: the second launch must hand over and
+  # exit, and `--quit` must stop rclone and end the process (scripts/smoke-quit.sh).
+  smoke-linux:
+    name: Smoke (single instance, clean quit)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config curl wget file unzip \
+            libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev libsoup-3.0-dev \
+            libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev libxdo-dev libssl-dev \
+            xvfb dbus-x11 procps
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: smoke
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Fetch rclone
+        run: scripts/fetch-rclone.sh
+
+      - name: Build the app (debug, no bundle)
+        run: npm run tauri build -- --debug --no-bundle
+
+      - name: Single instance and clean quit
+        run: scripts/smoke-quit.sh src-tauri/target/debug/orbit
+
   bundle-linux:
     name: Bundle (Linux AppImage + deb)
     runs-on: ubuntu-22.04
@@ -213,7 +255,7 @@ jobs:
   release:
     name: GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [check, bundle-linux, bundle-windows]
+    needs: [check, smoke-linux, bundle-linux, bundle-windows]
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     permissions:

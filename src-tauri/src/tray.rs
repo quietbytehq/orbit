@@ -141,7 +141,7 @@ impl TrayHandle {
 /// Creates the tray icon and its menu. Call once from setup.
 pub fn install(app: &AppHandle, variant: Variant) -> tauri::Result<()> {
     let status_item = MenuItem::with_id(app, MENU_STATUS, "Starting…", false, None::<&str>)?;
-    let show = MenuItem::with_id(app, MENU_SHOW, "Show Orbit", true, None::<&str>)?;
+    let show = MenuItem::with_id(app, MENU_SHOW, "Open Orbit", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, MENU_QUIT, "Quit Orbit", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(app, &[&status_item, &separator, &show, &quit])?;
@@ -153,7 +153,7 @@ pub fn install(app: &AppHandle, variant: Variant) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {
             MENU_SHOW => show_main_window(app),
-            MENU_QUIT => app.exit(0),
+            MENU_QUIT => crate::quit::request(app, false),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
@@ -212,6 +212,14 @@ pub fn set_theme<R: Runtime>(app: &AppHandle<R>, theme: Theme) {
             tray_image(variant, state).expect("bundled tray icon is valid"),
         ));
     }
+}
+
+/// Takes the icon out of the tray. Part of quitting; safe to call twice.
+pub fn remove(app: &AppHandle) {
+    if let Some(handle) = app.try_state::<TrayHandle>() {
+        *handle.0.lock().expect("tray lock") = None;
+    }
+    drop(app.remove_tray_by_id(TRAY_ID));
 }
 
 pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) {

@@ -25,6 +25,21 @@ pub const ENGINE_NOT_FOUND: &str = "Orbit could not find its storage engine. Rei
 pub const ENGINE_CUSTOM_PATH_MISSING: &str = "The custom engine program chosen in Settings is not there any more. Pick it again, or switch back to the built-in one.";
 pub const ENGINE_COULD_NOT_START: &str = "Orbit could not start its storage engine. Reinstall Orbit, or check the custom engine path in Settings.";
 
+// Quitting.
+pub const QUIT_TITLE: &str = "Quit Orbit?";
+pub const QUIT_ANYWAY: &str = "Quit";
+pub const KEEP_RUNNING: &str = "Keep running";
+pub fn quit_busy(count: usize) -> String {
+    if count == 1 {
+        "A transfer or backup is still running. Quitting stops it; it can be run again later."
+            .to_owned()
+    } else {
+        format!(
+            "{count} transfers or backups are still running. Quitting stops them; they can be run again later."
+        )
+    }
+}
+
 // Settings.
 pub const CONCURRENCY_RANGE: &str = "Files at the same time must be between 1 and 8.";
 pub const AUTOSTART_FAILED: &str = "Orbit could not change the start-at-sign-in setting on this computer. The details may say why.";

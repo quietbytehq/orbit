@@ -4,6 +4,7 @@ pub mod files;
 pub mod jobs;
 pub mod mounts;
 pub mod paths;
+pub mod quit;
 pub mod rclone;
 pub mod remotes;
 mod reveal;
@@ -105,7 +106,18 @@ fn on_rcd_change(app: &AppHandle, state: &RcdState) {
 }
 
 pub fn run() {
+    // A plain `orbit --quit` with no Orbit running has nothing to do. When one is running, the
+    // single-instance plugin below hands the argument to it and this process ends there.
+    let own_args: Vec<String> = std::env::args().collect();
     let app = tauri::Builder::default()
+        // Must come first: a second launch is forwarded to the running Orbit and exits.
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            if quit::wants_quit(&args) {
+                quit::request(app, true);
+            } else if !args.iter().any(|arg| arg == MINIMIZED_ARG) {
+                tray::show_main_window(app);
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -113,7 +125,12 @@ pub fn run() {
                 .arg(MINIMIZED_ARG)
                 .build(),
         )
-        .setup(|app| {
+        .setup(move |app| {
+            if quit::wants_quit(&own_args) {
+                // No other Orbit took the request (we got this far), so there is nothing to quit.
+                std::process::exit(0);
+            }
+            app.manage(quit::QuitState(AtomicBool::new(false)));
             let data_dir = app.path().app_data_dir()?;
             let paths = AppPaths::new(&data_dir);
             std::fs::create_dir_all(paths.logs_dir())?;
@@ -253,13 +270,18 @@ pub fn run() {
 
     app.run(|app_handle, event| {
         if let RunEvent::Exit = event {
-            let supervisor = app_handle.state::<Supervisor>().inner().clone();
-            tauri::async_runtime::block_on(async {
-                if let Ok(client) = supervisor.client() {
-                    mounts::unmount_all(&client).await;
-                }
-                supervisor.shutdown().await;
-            });
+            // Quit from the tray or `--quit` has already stopped everything. Any other exit
+            // (the session ending, a signal handled by Tauri) gets the same clean stop, bounded.
+            let already = app_handle
+                .try_state::<quit::QuitState>()
+                .is_some_and(|state| state.0.load(Ordering::SeqCst));
+            if !already {
+                let handle = app_handle.clone();
+                tauri::async_runtime::block_on(async move {
+                    let _ = tokio::time::timeout(quit::WATCHDOG, quit::shutdown_services(&handle))
+                        .await;
+                });
+            }
         }
     });
 }
