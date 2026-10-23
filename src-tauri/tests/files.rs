@@ -296,7 +296,7 @@ async fn failed_transfer_reports_a_message() {
         .unwrap();
     let states = wait_for_states(&queue, &ids, Duration::from_secs(60)).await;
     match &states[0] {
-        State::Failed { message } => assert!(!message.is_empty()),
+        State::Failed { message, .. } => assert!(!message.is_empty()),
         other => panic!("expected Failed, got {other:?}"),
     }
 

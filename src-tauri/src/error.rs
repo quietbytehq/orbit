@@ -1,12 +1,17 @@
 use serde::Serialize;
 use std::fmt;
 
-/// Error returned by every Tauri command. Serializes to `{ kind, message }`.
+/// Error returned by every Tauri command. Serializes to `{ kind, message, details? }`.
+///
+/// `message` is plain language: what happened and what to do next. `details` carries the raw
+/// technical text, when there is one, for the UI's "Show details" toggle.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppError {
     pub kind: ErrorKind,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -31,7 +36,19 @@ impl AppError {
         Self {
             kind,
             message: message.into(),
+            details: None,
         }
+    }
+
+    /// Attaches the technical text behind a plain message.
+    pub fn with_details(mut self, details: impl Into<String>) -> Self {
+        let details = details.into();
+        self.details = if details.trim().is_empty() {
+            None
+        } else {
+            Some(details)
+        };
+        self
     }
 
     pub fn invalid(message: impl Into<String>) -> Self {
@@ -53,13 +70,20 @@ impl std::error::Error for AppError {}
 
 impl From<std::io::Error> for AppError {
     fn from(err: std::io::Error) -> Self {
-        Self::new(ErrorKind::Io, err.to_string())
+        let message = match err.kind() {
+            std::io::ErrorKind::NotFound => "A file or folder Orbit needs is missing.",
+            std::io::ErrorKind::PermissionDenied => {
+                "Orbit is not allowed to access a file or folder it needs."
+            }
+            _ => "A file operation on this computer failed.",
+        };
+        Self::new(ErrorKind::Io, message).with_details(err.to_string())
     }
 }
 
 impl From<serde_json::Error> for AppError {
     fn from(err: serde_json::Error) -> Self {
-        Self::internal(format!("unexpected data from rclone: {err}"))
+        Self::internal(crate::text::ENGINE_BAD_ANSWER).with_details(err.to_string())
     }
 }
 
@@ -75,5 +99,12 @@ mod tests {
         let json = serde_json::to_value(&err).unwrap();
         assert_eq!(json["kind"], "notRunning");
         assert_eq!(json["message"], "rclone is starting");
+        assert!(
+            json.get("details").is_none(),
+            "no details key when there are none"
+        );
+        let with = err.with_details("raw text");
+        assert_eq!(serde_json::to_value(&with).unwrap()["details"], "raw text");
+        assert_eq!(AppError::internal("x").with_details("  ").details, None);
     }
 }

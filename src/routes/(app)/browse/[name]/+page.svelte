@@ -9,9 +9,11 @@
   import ToolbarButton from "$lib/components/ToolbarButton.svelte";
   import { ArrowUp, Copy, Download, FILE_ICONS, FolderInput, FolderPlus, ICON, Pencil, RefreshCw, Trash, Upload } from "$lib/icons";
   import { fileKind } from "$lib/util/filekind";
-  import { api, errorMessage } from "$lib/api";
-  import type { Endpoint, FileEntry, TransferRequest } from "$lib/api/types";
+  import ErrorNote from "$lib/components/ErrorNote.svelte";
+  import { api, asAppError } from "$lib/api";
+  import type { AppError, Endpoint, FileEntry, TransferRequest } from "$lib/api/types";
   import { transfers } from "$lib/stores/transfers.svelte";
+  import { text } from "$lib/text/index.svelte";
   import { formatBytes } from "$lib/util/format";
   import { isInside, join, normalizePath, split } from "$lib/util/path";
 
@@ -20,7 +22,7 @@
 
   let entries = $state<FileEntry[]>([]);
   let loading = $state(false);
-  let error = $state<string | null>(null);
+  let error = $state<AppError | string | null>(null);
   let notice = $state<string | null>(null);
   let selected = $state<string[]>([]);
   let anchor = $state<number | null>(null);
@@ -49,7 +51,7 @@
       selected = [];
       anchor = null;
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
       entries = [];
     } finally {
       loading = false;
@@ -133,10 +135,10 @@
         isDir: local.isDir,
       }));
       if (await transfers.enqueue(requests)) {
-        notice = `Uploading ${requests.length === 1 ? requests[0].name : `${requests.length} items`} to ${remote}.`;
+        notice = text.s.browse.uploading(text.s.browse.items(requests.length, requests[0].name), remote);
       }
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     }
   }
 
@@ -156,7 +158,7 @@
       "copy",
     );
     if (await transfers.enqueue(requests)) {
-      notice = `Downloading ${requests.length === 1 ? requests[0].name : `${requests.length} items`} to ${folder}.`;
+      notice = text.s.browse.downloading(text.s.browse.items(requests.length, requests[0].name), folder);
     }
   }
 
@@ -168,7 +170,7 @@
       dialog = null;
       await load();
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     } finally {
       busy = false;
     }
@@ -206,11 +208,11 @@
   async function chooseDestination(mode: "copy" | "move", destRemote: string, destPath: string) {
     const sameFolder = destRemote === remote && normalizePath(destPath) === path;
     if (mode === "move" && sameFolder) {
-      error = "Choose a different folder to move these items to.";
+      error = text.s.browse.sameFolderMove;
       return;
     }
     if (mode === "move" && destRemote === remote && selectedEntries.some((e) => e.isDir && isInside(destPath, e.path))) {
-      error = "A folder cannot be moved into itself.";
+      error = text.s.browse.folderIntoItself;
       return;
     }
     dialog = null;
@@ -222,7 +224,8 @@
       mode,
     );
     if (await transfers.enqueue(requests)) {
-      notice = `${mode === "copy" ? "Copying" : "Moving"} ${requests.length === 1 ? requests[0].name : `${requests.length} items`} to ${destRemote}.`;
+      const what = text.s.browse.items(requests.length, requests[0].name);
+      notice = mode === "copy" ? text.s.browse.copying(what, destRemote) : text.s.browse.moving(what, destRemote);
     }
   }
 
@@ -247,7 +250,7 @@
 <header class="toolbar">
   <div class="title">
     <nav class="crumbs" aria-label="Location">
-      <a href="/remotes">Remotes</a>
+      <a href="/remotes">{text.s.browse.crumbsRoot}</a>
       <span aria-hidden="true">/</span>
       {#if path === ""}
         <span class="current">{remote}</span>
@@ -265,31 +268,31 @@
     </nav>
   </div>
   <div class="actions">
-    <ToolbarButton icon={ArrowUp} label="Up" onclick={up} disabled={path === ""} />
-    <ToolbarButton icon={RefreshCw} label="Refresh" onclick={() => load()} disabled={loading} />
-    <ToolbarButton icon={FolderPlus} label="New folder" onclick={startNewFolder} />
-    <ToolbarButton icon={Upload} label="Upload…" onclick={pickUpload} />
-    <ToolbarButton icon={Download} label="Download…" onclick={download} disabled={selectedEntries.length === 0} />
-    <ToolbarButton icon={Copy} label="Copy to…" onclick={() => (dialog = "copy")} disabled={selectedEntries.length === 0} />
-    <ToolbarButton icon={FolderInput} label="Move to…" onclick={() => (dialog = "move")} disabled={selectedEntries.length === 0} />
-    <ToolbarButton icon={Pencil} label="Rename…" onclick={startRename} disabled={selectedEntries.length !== 1} />
-    <ToolbarButton icon={Trash} label="Delete…" onclick={() => (dialog = "delete")} disabled={selectedEntries.length === 0} destructive />
+    <ToolbarButton icon={ArrowUp} label={text.s.browse.up} onclick={up} disabled={path === ""} />
+    <ToolbarButton icon={RefreshCw} label={text.s.browse.refresh} onclick={() => load()} disabled={loading} />
+    <ToolbarButton icon={FolderPlus} label={text.s.browse.newFolder} onclick={startNewFolder} />
+    <ToolbarButton icon={Upload} label={text.s.browse.upload} onclick={pickUpload} />
+    <ToolbarButton icon={Download} label={text.s.browse.download} onclick={download} disabled={selectedEntries.length === 0} />
+    <ToolbarButton icon={Copy} label={text.s.browse.copyTo} onclick={() => (dialog = "copy")} disabled={selectedEntries.length === 0} />
+    <ToolbarButton icon={FolderInput} label={text.s.browse.moveTo} onclick={() => (dialog = "move")} disabled={selectedEntries.length === 0} />
+    <ToolbarButton icon={Pencil} label={text.s.browse.rename} onclick={startRename} disabled={selectedEntries.length !== 1} />
+    <ToolbarButton icon={Trash} label={text.s.browse.delete} onclick={() => (dialog = "delete")} disabled={selectedEntries.length === 0} destructive />
   </div>
 </header>
 
-{#if error}<p class="error" role="alert">{error}</p>{/if}
+<ErrorNote {error} />
 {#if notice}<p class="notice" role="status">{notice}</p>{/if}
 
 <div class="listing" class:dropping aria-busy={loading}>
   {#if dropping}
-    <div class="drop-hint">Drop to upload to {path || remote}</div>
+    <div class="drop-hint">{text.s.browse.dropHint(path || remote)}</div>
   {/if}
   <table>
     <thead>
       <tr>
-        <th scope="col">Name</th>
-        <th scope="col" class="modified">Modified</th>
-        <th scope="col" class="size">Size</th>
+        <th scope="col">{text.s.browse.columns.name}</th>
+        <th scope="col" class="modified">{text.s.browse.columns.modified}</th>
+        <th scope="col" class="size">{text.s.browse.columns.size}</th>
       </tr>
     </thead>
     <tbody>
@@ -305,47 +308,53 @@
         >
           <td class="name"><span class="icon" class:folder={entry.isDir}><Icon {...ICON} /></span>{entry.name}</td>
           <td class="modified">{formatDate(entry.modTime)}</td>
-          <td class="size">{entry.isDir ? "—" : formatBytes(entry.size)}</td>
+          {#if entry.isDir}
+            <td class="size">—</td>
+          {:else if entry.size < 0}
+            <td class="size" title={text.s.browse.noSizeTitle}><span class="dotted">—</span></td>
+          {:else}
+            <td class="size">{formatBytes(entry.size)}</td>
+          {/if}
         </tr>
       {/each}
     </tbody>
   </table>
   {#if !loading && entries.length === 0 && !error}
-    <p class="empty">This folder is empty. Drop files here or use Upload.</p>
+    <p class="empty">{text.s.browse.empty}</p>
   {/if}
 </div>
 
 {#if dialog === "newFolder"}
-  <Dialog title="New folder" onClose={() => (dialog = null)}>
+  <Dialog title={text.s.browse.newFolderTitle} onClose={() => (dialog = null)}>
     <form onsubmit={(event) => { event.preventDefault(); newFolder(); }}>
-      <input class="input" bind:value={inputName} placeholder="Folder name" aria-label="Folder name" />
+      <input class="input" bind:value={inputName} placeholder={text.s.browse.folderName} aria-label={text.s.browse.folderName} />
       <div class="dialog-actions">
-        <button type="button" class="button" onclick={() => (dialog = null)}>Cancel</button>
-        <button type="submit" class="button primary" disabled={busy || !inputName.trim()}>Create</button>
+        <button type="button" class="button" onclick={() => (dialog = null)}>{text.s.common.cancel}</button>
+        <button type="submit" class="button primary" disabled={busy || !inputName.trim()}>{text.s.browse.create}</button>
       </div>
     </form>
   </Dialog>
 {:else if dialog === "rename" && selectedEntries[0]}
-  <Dialog title="Rename" onClose={() => (dialog = null)}>
+  <Dialog title={text.s.browse.renameTitle} onClose={() => (dialog = null)}>
     <form onsubmit={(event) => { event.preventDefault(); rename(); }}>
-      <input class="input" bind:value={inputName} aria-label="New name" />
+      <input class="input" bind:value={inputName} aria-label={text.s.browse.newName} />
       <div class="dialog-actions">
-        <button type="button" class="button" onclick={() => (dialog = null)}>Cancel</button>
-        <button type="submit" class="button primary" disabled={busy || !inputName.trim()}>Rename</button>
+        <button type="button" class="button" onclick={() => (dialog = null)}>{text.s.common.cancel}</button>
+        <button type="submit" class="button primary" disabled={busy || !inputName.trim()}>{text.s.browse.renameButton}</button>
       </div>
     </form>
   </Dialog>
 {:else if dialog === "delete"}
-  <Dialog title={`Delete ${selectedEntries.length === 1 ? selectedEntries[0].name : `${selectedEntries.length} items`}?`} onClose={() => (dialog = null)}>
-    <p>This is permanent. Folders are deleted with everything inside them, and nothing goes to a trash.</p>
+  <Dialog title={text.s.browse.deleteTitle(text.s.browse.items(selectedEntries.length, selectedEntries[0]?.name ?? ""))} onClose={() => (dialog = null)}>
+    <p>{text.s.browse.deleteBody}</p>
     <div class="dialog-actions">
-      <button class="button" onclick={() => (dialog = null)}>Cancel</button>
-      <button class="button destructive-fill" onclick={remove} disabled={busy}>Delete permanently</button>
+      <button class="button" onclick={() => (dialog = null)}>{text.s.common.cancel}</button>
+      <button class="button destructive-fill" onclick={remove} disabled={busy}>{text.s.browse.deleteButton}</button>
     </div>
   </Dialog>
 {:else if dialog === "copy" || dialog === "move"}
   <DestinationPicker
-    heading={dialog === "copy" ? "Copy to" : "Move to"}
+    heading={dialog === "copy" ? text.s.browse.copyHeading : text.s.browse.moveHeading}
     initialRemote={remote}
     onChoose={(destRemote, destPath) => chooseDestination(dialog === "copy" ? "copy" : "move", destRemote, destPath)}
     onCancel={() => (dialog = null)}
@@ -392,8 +401,9 @@
     gap: 6px;
     flex-wrap: wrap;
   }
-  .error {
-    color: var(--status-disconnected);
+  .dotted {
+    border-bottom: 1px dotted currentColor;
+    cursor: help;
   }
   .notice {
     color: var(--text-secondary);
@@ -492,17 +502,5 @@
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-  }
-  :global(.button.destructive) {
-    color: var(--status-disconnected);
-  }
-  :global(.button.destructive-fill) {
-    background: var(--status-disconnected);
-    color: #fff;
-    border: none;
-    border-radius: var(--radius-control);
-    padding: 6px 14px;
-    cursor: pointer;
-    font-weight: 500;
   }
 </style>

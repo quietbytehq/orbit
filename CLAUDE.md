@@ -32,7 +32,10 @@ scripts/              rclone fetch scripts and version pin.
   Frontend helpers have vitest tests. Run `cargo test`, `npm run check`, and `npm test` before a
   milestone commit.
 - **Errors:** Tauri commands return `Result<T, AppError>`. `AppError` serializes to
-  `{ kind, message }`. Do not panic in command handlers.
+  `{ kind, message, details? }`: `message` is plain language (what happened, what to do next),
+  `details` the raw technical text. Do not panic in command handlers.
+- **Wording:** every user-facing string goes in `src/lib/text/strings.ts` (UI) or
+  `src-tauri/src/text.rs` (backend); see SPEC §3.4. No "remote", "mount", "rcd" or "RC" on screen.
 - **Platform code:** Windows-only code goes behind `#[cfg(windows)]`. Linux must compile and run
   without Windows-only dependencies. Use `CREATE_NO_WINDOW` when spawning rclone on Windows.
 - **Design:** follow the tokens in `SPEC.md` §3. Status colors are fixed: green `#34C759`, blue

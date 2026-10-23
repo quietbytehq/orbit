@@ -1,6 +1,8 @@
 <script lang="ts">
+  import ErrorNote from "$lib/components/ErrorNote.svelte";
   import StatusBadge from "$lib/components/StatusBadge.svelte";
   import { rcd } from "$lib/stores/rcd.svelte";
+  import { text } from "$lib/text/index.svelte";
   import { overallStatus } from "$lib/util/status";
   import { ICON, RefreshCw } from "$lib/icons";
 
@@ -14,36 +16,34 @@
   }
 </script>
 
-<h1>Overview</h1>
+<h1>{text.s.overview.title}</h1>
 
 <section class="card engine" aria-labelledby="engine-title">
   <div class="row">
     <div>
-      <h2 id="engine-title">rclone engine</h2>
+      <h2 id="engine-title">{text.s.overview.engineTitle}</h2>
       <p class="detail">
         {#if rcd.state.state === "healthy"}
-          rclone {rcd.state.version} is running on this computer.
+          {text.s.overview.ready(rcd.state.version)}
         {:else if rcd.state.state === "starting"}
-          Starting rclone…
+          {text.s.overview.starting}
         {:else if rcd.state.state === "restarting"}
-          Reconnecting, attempt {rcd.state.attempt} of 3…
+          {text.s.overview.restarting(rcd.state.attempt)}
         {:else if rcd.state.state === "failed"}
           {rcd.state.message}
         {:else}
-          rclone is stopped.
+          {text.s.overview.stopped}
         {/if}
       </p>
     </div>
     <div class="side">
       <StatusBadge {status} />
       <button class="button with-icon" onclick={restart} disabled={restarting || rcd.state.state === "starting"}>
-        <RefreshCw {...ICON} />Restart rclone
+        <RefreshCw {...ICON} />{text.s.overview.restart}
       </button>
     </div>
   </div>
-  {#if rcd.error}
-    <p class="error" role="alert">{rcd.error}</p>
-  {/if}
+  <ErrorNote error={rcd.error} />
 </section>
 
 <style>
@@ -65,11 +65,10 @@
   .side {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     flex: none;
   }
-  .error {
-    color: var(--status-disconnected);
-    margin: 12px 0 0;
+  .engine {
+    max-width: 680px;
   }
 </style>

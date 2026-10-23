@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { FieldDef } from "$lib/api/types";
+  import { text } from "$lib/text/index.svelte";
 
   let {
     field,
@@ -16,7 +17,7 @@
   const inputId = $derived(`field-${field.key}`);
   const isSecret = $derived(field.kind.kind === "secret");
   const placeholder = $derived(
-    isSecret && savedSecret ? "Saved. Leave blank to keep it." : field.required ? "" : "Optional",
+    isSecret && savedSecret ? text.s.wizard.savedSecret : field.required ? "" : text.s.wizard.optional,
   );
 </script>
 

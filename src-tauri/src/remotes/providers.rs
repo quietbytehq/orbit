@@ -1,6 +1,7 @@
 //! Provider definitions for the add-remote wizards, and turning form values into rclone parameters.
 
 use crate::error::{AppError, AppResult};
+use crate::text;
 use serde::Serialize;
 use std::collections::BTreeMap;
 
@@ -282,10 +283,7 @@ pub fn build_parameters(
             if let Some(default) = field.default {
                 params.insert(field.key.to_owned(), default.to_owned());
             } else if field.required {
-                return Err(AppError::invalid(format!(
-                    "Please fill in {}.",
-                    field.label.to_lowercase()
-                )));
+                return Err(AppError::invalid(text::field_required(field.label)));
             } else if update.is_some() {
                 params.insert(field.key.to_owned(), String::new());
             }
@@ -295,20 +293,18 @@ pub fn build_parameters(
             FieldKind::Number { min, max } => {
                 let number: u32 = raw
                     .parse()
-                    .map_err(|_| AppError::invalid(format!("{} must be a number.", field.label)))?;
+                    .map_err(|_| AppError::invalid(text::field_not_a_number(field.label)))?;
                 if number < u32::from(min) || number > u32::from(max) {
-                    return Err(AppError::invalid(format!(
-                        "{} must be between {min} and {max}.",
-                        field.label
+                    return Err(AppError::invalid(text::field_out_of_range(
+                        field.label,
+                        min,
+                        max,
                     )));
                 }
             }
             FieldKind::Choice { options } => {
                 if !options.iter().any(|option| option.value == raw) {
-                    return Err(AppError::invalid(format!(
-                        "Choose a valid option for {}.",
-                        field.label.to_lowercase()
-                    )));
+                    return Err(AppError::invalid(text::field_bad_choice(field.label)));
                 }
             }
             FieldKind::Text | FieldKind::Secret => {}
@@ -333,15 +329,13 @@ fn check_cross_field_rules(
             let has_password =
                 filled(params, "pass") || (kept_password && !params.contains_key("pass"));
             if !has_password && !filled(params, "key_file") {
-                return Err(AppError::invalid("Enter a password or choose a key file."));
+                return Err(AppError::invalid(text::PASSWORD_OR_KEY_FILE));
             }
         }
         "s3" => {
             let service = params.get("provider").map(String::as_str).unwrap_or("AWS");
             if service != "AWS" && !filled(params, "endpoint") {
-                return Err(AppError::invalid(
-                    "Enter the endpoint address for this service.",
-                ));
+                return Err(AppError::invalid(text::ENDPOINT_REQUIRED));
             }
             if service == "AWS" && update.is_none() {
                 // Amazon S3 needs no endpoint, so an empty one is not stored when creating.
@@ -360,12 +354,10 @@ pub fn validate_remote_name(name: &str) -> AppResult<String> {
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
     if trimmed.is_empty() {
-        return Err(AppError::invalid("Give this connection a name."));
+        return Err(AppError::invalid(text::NAME_BLANK));
     }
     if trimmed.len() > 40 || !valid_chars {
-        return Err(AppError::invalid(
-            "Names can use letters, numbers, dashes and underscores, up to 40 characters.",
-        ));
+        return Err(AppError::invalid(text::NAME_RULES));
     }
     Ok(trimmed.to_owned())
 }

@@ -185,7 +185,7 @@ async fn missing_source_fails_with_a_message_and_locks_are_enforced() {
     runner.run(&job.job.id).unwrap();
     let (outcome, _, _) = wait_for_run(&runner, &job.job.id).await;
     match outcome {
-        RunOutcome::Failed { message } => assert!(!message.is_empty()),
+        RunOutcome::Failed { message, .. } => assert!(!message.is_empty()),
         other => panic!("expected Failed, got {other:?}"),
     }
 

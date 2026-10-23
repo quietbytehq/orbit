@@ -1,27 +1,27 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, errorMessage } from "$lib/api";
-  import type { ProviderDef } from "$lib/api/types";
+  import ErrorNote from "$lib/components/ErrorNote.svelte";
+  import { api, asAppError } from "$lib/api";
+  import type { AppError, ProviderDef } from "$lib/api/types";
+  import { text } from "$lib/text/index.svelte";
   import { ICON_LG, providerIcon } from "$lib/icons";
 
   let providers = $state<ProviderDef[]>([]);
-  let error = $state<string | null>(null);
+  let error = $state<AppError | null>(null);
 
   onMount(async () => {
     try {
       providers = await api.listProviders();
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     }
   });
-
-  const authLabel = { browser: "Browser sign-in", credentials: "Keys or password" } as const;
 </script>
 
-<h1>Add a remote</h1>
-<p class="help">Choose the service you want to connect. You can add more later.</p>
+<h1>{text.s.wizard.title}</h1>
+<p class="help">{text.s.wizard.intro}</p>
 
-{#if error}<p class="error" role="alert">{error}</p>{/if}
+<ErrorNote {error} />
 
 <div class="grid">
   {#each providers as provider (provider.id)}
@@ -30,7 +30,7 @@
       <span class="glyph"><Icon {...ICON_LG} /></span>
       <span class="title">{provider.title}</span>
       <span class="tagline">{provider.tagline}</span>
-      <span class="auth">{authLabel[provider.auth]}</span>
+      <span class="auth">{provider.auth === "browser" ? text.s.wizard.authBrowser : text.s.wizard.authCredentials}</span>
     </a>
   {/each}
 </div>
@@ -39,9 +39,6 @@
   .help {
     color: var(--text-secondary);
     margin: -12px 0 20px;
-  }
-  .error {
-    color: var(--status-disconnected);
   }
   .grid {
     display: grid;

@@ -1,4 +1,5 @@
 use crate::error::{AppError, ErrorKind};
+use crate::text;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
@@ -24,13 +25,10 @@ pub fn resolve_binary(
         return if path.is_file() {
             Ok(path.to_path_buf())
         } else {
-            Err(AppError::new(
-                ErrorKind::InvalidInput,
-                format!(
-                    "The rclone path in settings does not exist: {}",
-                    path.display()
-                ),
-            ))
+            Err(
+                AppError::new(ErrorKind::InvalidInput, text::ENGINE_CUSTOM_PATH_MISSING)
+                    .with_details(path.display().to_string()),
+            )
         };
     }
 
@@ -49,10 +47,7 @@ pub fn resolve_binary(
         return Ok(found);
     }
 
-    Err(AppError::new(
-        ErrorKind::NotRunning,
-        "Could not find rclone. Reinstall Orbit or set a custom rclone path in Settings.",
-    ))
+    Err(AppError::new(ErrorKind::NotRunning, text::ENGINE_NOT_FOUND))
 }
 
 #[cfg(test)]

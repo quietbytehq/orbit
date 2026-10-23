@@ -1,11 +1,11 @@
-import { api, errorMessage } from "$lib/api";
-import type { Settings } from "$lib/api/types";
+import { api, asAppError } from "$lib/api";
+import type { AppError, Settings } from "$lib/api/types";
 import { applyTheme } from "$lib/util/theme";
 
 /** App settings. Changes are saved as soon as they are made. */
 class SettingsStore {
   value = $state<Settings | null>(null);
-  error = $state<string | null>(null);
+  error = $state<AppError | null>(null);
 
   async load() {
     try {
@@ -13,7 +13,7 @@ class SettingsStore {
       this.value = settings;
       applyTheme(settings.theme);
     } catch (err) {
-      this.error = errorMessage(err);
+      this.error = asAppError(err);
     }
   }
 
@@ -24,7 +24,7 @@ class SettingsStore {
       applyTheme(this.value.theme);
       return true;
     } catch (err) {
-      this.error = errorMessage(err);
+      this.error = asAppError(err);
       await this.load();
       return false;
     }

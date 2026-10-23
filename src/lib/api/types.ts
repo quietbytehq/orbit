@@ -14,10 +14,20 @@ export type OverallStatus = "synced" | "syncing" | "disconnected";
 /** Mirrors `error::ErrorKind`. */
 export type ErrorKind = "notRunning" | "rclone" | "invalidInput" | "io" | "unsupported" | "internal";
 
-/** Error shape returned by every command. Mirrors `error::AppError`. */
+/**
+ * Error shape returned by every command. Mirrors `error::AppError`. `message` is plain language;
+ * `details`, when present, is the raw technical text for the "Show details" toggle.
+ */
 export interface AppError {
   kind: ErrorKind;
   message: string;
+  details?: string;
+}
+
+/** Mirrors `commands::AppInfo`: facts about this build the UI needs for wording. */
+export interface AppInfo {
+  platform: "linux" | "windows" | "other";
+  version: string;
 }
 
 export type AuthKind = "browser" | "credentials";
@@ -74,10 +84,11 @@ export interface RemoteForm {
   savedSecrets: string[];
 }
 
-/** Mirrors `remotes::ConnectionTest`. */
+/** Mirrors `remotes::ConnectionTest`. `details` holds the raw engine text when the test failed. */
 export interface ConnectionTest {
   ok: boolean;
   message: string;
+  details?: string;
 }
 
 /** Mirrors `remotes::commands::NewRemote`. */
@@ -120,7 +131,7 @@ export type TransferState =
   | { state: "queued" }
   | { state: "running" }
   | { state: "done" }
-  | { state: "failed"; message: string }
+  | { state: "failed"; message: string; details?: string }
   | { state: "cancelled" };
 
 /** Mirrors `files::transfers::Item`. */
@@ -159,7 +170,7 @@ export type JobKind = "sync" | "copy";
 export type RunOutcome =
   | { state: "running" }
   | { state: "succeeded" }
-  | { state: "failed"; message: string }
+  | { state: "failed"; message: string; details?: string }
   | { state: "cancelled" };
 
 /**

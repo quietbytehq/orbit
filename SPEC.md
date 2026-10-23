@@ -106,7 +106,25 @@ The same colors are used for the tray icons and for the status badges on remotes
   64, 256, plus a multi-size `.ico` per variant and state for Windows. The generator is `gen.py`.
   The tray chooses variant from the system theme and state from rcd health and activity.
 
-### 3.4 Splash
+### 3.4 Wording
+
+- The UI is written for someone who has never heard of rclone. Internal names stay in the code and
+  the spec; on screen they are: remotes → **Cloud storage**, sync jobs → **Backup & sync** (job
+  kinds: **Copy** and **Mirror**), mounts → **Drives** on Windows and **Folders** on Linux, with the
+  actions "Show as drive" / "Show as folder" and "Remove drive" / "Remove folder". "rcd" and "RC"
+  never appear. "rclone" is named only in the product name, on the Overview engine card and in
+  Settings › Advanced, where the person is about to deal with it.
+- Platform words: Windows text says drive letter, File Explorer and This PC; Linux text says folder
+  and file manager. The backend tells the UI the platform (`app_info`), and the mount suggestion is
+  a free drive letter on Windows (Z: downward) and `~/Orbit/<name>` on Linux.
+- Errors say what happened and what to do next in one or two sentences. The raw technical text
+  travels in `AppError.details` (also on failed connection checks, transfers and runs) and the UI
+  shows it behind a "Show details" toggle (`ErrorNote`).
+- All strings live in two files: `src/lib/text/strings.ts` (UI, built per platform, with tests that
+  reject jargon) and `src-tauri/src/text.rs` (backend messages). The one exception is the wording of
+  the add-storage wizards, which lives with the form definitions in `remotes::providers`.
+
+### 3.5 Splash
 
 - Shown in its own borderless window (360×360), on a light or dark gradient matching the system theme.
 - Two versions of the same sequence, scaled proportionally from a 3.5 s base (timings in

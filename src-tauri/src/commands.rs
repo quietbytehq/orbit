@@ -4,8 +4,25 @@ use crate::paths::AppPaths;
 use crate::rclone::{self, RcdState, Supervisor};
 use crate::reveal::RevealState;
 use crate::settings::{self, Settings, SettingsStore};
+use serde::Serialize;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
+
+/// Facts about this build the UI needs for wording: the platform and the version.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfo {
+    pub platform: &'static str,
+    pub version: String,
+}
+
+#[tauri::command]
+pub fn app_info(app: AppHandle) -> AppInfo {
+    AppInfo {
+        platform: crate::mounts::platform(),
+        version: app.package_info().version.to_string(),
+    }
+}
 
 #[tauri::command]
 pub fn get_rcd_state(supervisor: State<'_, Supervisor>) -> RcdState {

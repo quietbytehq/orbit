@@ -1,10 +1,10 @@
-import { api, onRcdState, errorMessage } from "$lib/api";
-import type { RcdState } from "$lib/api/types";
+import { api, onRcdState, asAppError } from "$lib/api";
+import type { AppError, RcdState } from "$lib/api/types";
 
 /** Live view of the rclone daemon. Components read `state` and call `restart()`. */
 class RcdStore {
   state = $state<RcdState>({ state: "starting" });
-  error = $state<string | null>(null);
+  error = $state<AppError | null>(null);
   #started = false;
 
   async start() {
@@ -16,7 +16,7 @@ class RcdStore {
     try {
       this.state = await api.getRcdState();
     } catch (err) {
-      this.error = errorMessage(err);
+      this.error = asAppError(err);
     }
   }
 
@@ -25,7 +25,7 @@ class RcdStore {
     try {
       await api.restartRcd();
     } catch (err) {
-      this.error = errorMessage(err);
+      this.error = asAppError(err);
     }
   }
 }

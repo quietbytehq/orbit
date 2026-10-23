@@ -2,9 +2,11 @@
   import { onMount } from "svelte";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import Dialog from "$lib/components/Dialog.svelte";
-  import { api, errorMessage } from "$lib/api";
-  import type { MountInfo, MountSupport, RemoteSummary } from "$lib/api/types";
+  import ErrorNote from "$lib/components/ErrorNote.svelte";
+  import { api, asAppError } from "$lib/api";
+  import type { AppError, MountInfo, MountSupport, RemoteSummary } from "$lib/api/types";
   import { rcd } from "$lib/stores/rcd.svelte";
+  import { text } from "$lib/text/index.svelte";
   import { Eject, HardDrive, ICON, ICON_LG, RefreshCw, providerIcon } from "$lib/icons";
 
   const WINFSP_PAGE = "https://winfsp.dev/rel/";
@@ -12,7 +14,7 @@
   let support = $state<MountSupport | null>(null);
   let mounts = $state<MountInfo[]>([]);
   let remotes = $state<RemoteSummary[]>([]);
-  let error = $state<string | null>(null);
+  let error = $state<AppError | null>(null);
   let busy = $state(false);
   let mounting = $state<RemoteSummary | null>(null);
   let location = $state("");
@@ -23,7 +25,7 @@
       [support, remotes] = await Promise.all([api.mountSupport(), api.listRemotes()]);
       mounts = rcd.state.state === "healthy" ? await api.listMounts() : [];
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     }
   }
 
@@ -50,7 +52,7 @@
       mounting = null;
       await load();
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     } finally {
       busy = false;
     }
@@ -62,38 +64,38 @@
       await api.unmountRemote(mount.mountPoint);
       await load();
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     }
   }
 
   const mountedNames = $derived(new Set(mounts.map((mount) => mount.remote)));
 </script>
 
-<h1>Mounts</h1>
-<p class="help">A mounted remote appears as a folder{support?.platform === "windows" ? " with a drive letter" : ""} on this computer. Mounts end when Orbit quits.</p>
+<h1>{text.s.drives.title}</h1>
+<p class="help">{text.s.drives.intro}</p>
 
 {#if support && !support.available}
   <section class="card notice-card">
-    <h2>Mounting needs one more install</h2>
+    <h2>{text.s.drives.needsInstallTitle}</h2>
     <p>{support.requirement}</p>
     <div class="actions">
       {#if support.platform === "windows"}
-        <button class="button" onclick={() => openUrl(WINFSP_PAGE)}>Get WinFsp</button>
+        <button class="button" onclick={() => openUrl(WINFSP_PAGE)}>{text.s.drives.getWinFsp}</button>
       {/if}
-      <button class="button with-icon" onclick={load}><RefreshCw {...ICON} />Check again</button>
+      <button class="button with-icon" onclick={load}><RefreshCw {...ICON} />{text.s.drives.checkAgain}</button>
     </div>
   </section>
 {/if}
 
 {#if rcd.state.state !== "healthy"}
-  <p class="notice">Orbit cannot reach rclone right now.</p>
+  <p class="notice">{text.s.common.engineDown}</p>
 {/if}
-{#if error}<p class="error" role="alert">{error}</p>{/if}
+<ErrorNote {error} />
 
 <section class="section">
-  <h2>Mounted now</h2>
+  <h2>{text.s.drives.connectedNow}</h2>
   {#if mounts.length === 0}
-    <p class="help">Nothing is mounted.</p>
+    <p class="help">{text.s.drives.nothingConnected}</p>
   {:else}
     <ul class="list">
       {#each mounts as mount (mount.mountPoint)}
@@ -103,7 +105,7 @@
             <span class="name">{mount.remote}</span>
             <span class="place">{mount.mountPoint}</span>
           </div>
-          <button class="button with-icon" onclick={() => unmount(mount)}><Eject {...ICON} />Unmount</button>
+          <button class="button with-icon" onclick={() => unmount(mount)}><Eject {...ICON} />{text.s.drives.remove}</button>
         </li>
       {/each}
     </ul>
@@ -111,9 +113,9 @@
 </section>
 
 <section class="section">
-  <h2>Mount a remote</h2>
+  <h2>{text.s.drives.available}</h2>
   {#if remotes.length === 0}
-    <p class="help">Add a remote first, then mount it here.</p>
+    <p class="help">{text.s.drives.addStorageFirst}</p>
   {:else}
     <ul class="list">
       {#each remotes as remote (remote.name)}
@@ -125,10 +127,10 @@
             <span class="place">{remote.providerTitle}</span>
           </div>
           {#if mountedNames.has(remote.name)}
-            <span class="place">Mounted</span>
+            <span class="place">{text.s.drives.connected}</span>
           {:else}
             <button class="button with-icon" onclick={() => startMount(remote)} disabled={!support?.available || rcd.state.state !== "healthy"}>
-              <HardDrive {...ICON} />Mount…
+              <HardDrive {...ICON} />{text.s.drives.show}
             </button>
           {/if}
         </li>
@@ -138,26 +140,20 @@
 </section>
 
 {#if mounting}
-  <Dialog title={`Mount ${mounting.name}`} onClose={() => (mounting = null)}>
+  <Dialog title={text.s.drives.dialogTitle(mounting.name)} onClose={() => (mounting = null)}>
     <form
       onsubmit={(event) => {
         event.preventDefault();
         void confirmMount();
       }}
     >
-      <label class="label" for="mount-location">
-        {support?.platform === "windows" ? "Drive letter" : "Folder"}
-      </label>
+      <label class="label" for="mount-location">{text.s.drives.locationLabel}</label>
       <input id="mount-location" class="input" bind:value={location} disabled={busy} />
-      <p class="help">
-        {support?.platform === "windows"
-          ? "Pick a free drive letter. The remote will appear in File Explorer under it."
-          : "The folder is created if it does not exist. It must be empty."}
-      </p>
+      <p class="help">{text.s.drives.locationHelp}</p>
       <div class="dialog-actions">
-        <button type="button" class="button" onclick={() => (mounting = null)} disabled={busy}>Cancel</button>
+        <button type="button" class="button" onclick={() => (mounting = null)} disabled={busy}>{text.s.common.cancel}</button>
         <button type="submit" class="button primary" disabled={busy || !location.trim()}>
-          {busy ? "Mounting…" : "Mount"}
+          {busy ? text.s.drives.connecting : text.s.drives.connect}
         </button>
       </div>
     </form>
@@ -240,8 +236,7 @@
     gap: 10px;
     justify-content: flex-end;
   }
-  .notice,
-  .error {
+  .notice {
     color: var(--status-disconnected);
   }
   .label {

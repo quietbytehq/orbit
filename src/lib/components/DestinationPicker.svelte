@@ -1,9 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Dialog from "./Dialog.svelte";
-  import { api, errorMessage } from "$lib/api";
-  import type { FileEntry, RemoteSummary } from "$lib/api/types";
+  import { api, asAppError } from "$lib/api";
+  import type { AppError, FileEntry, RemoteSummary } from "$lib/api/types";
+  import { text } from "$lib/text/index.svelte";
   import { split } from "$lib/util/path";
+  import { ArrowUp, Folder, ICON } from "$lib/icons";
+  import ErrorNote from "./ErrorNote.svelte";
 
   let {
     heading,
@@ -22,7 +25,7 @@
   let remote = $state(initialRemote);
   let path = $state("");
   let folders = $state<FileEntry[]>([]);
-  let error = $state<string | null>(null);
+  let error = $state<AppError | null>(null);
   let loading = $state(false);
 
   const crumbs = $derived(crumbsFor(path));
@@ -30,7 +33,7 @@
   function crumbsFor(current: string): { label: string; path: string }[] {
     const parts = current.split("/").filter(Boolean);
     return [
-      { label: "Top level", path: "" },
+      { label: text.s.picker.topLevel, path: "" },
       ...parts.map((part, index) => ({ label: part, path: parts.slice(0, index + 1).join("/") })),
     ];
   }
@@ -42,7 +45,7 @@
       const entries = await api.listFiles(remote, path);
       folders = entries.filter((entry) => entry.isDir);
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
       folders = [];
     } finally {
       loading = false;
@@ -60,7 +63,7 @@
       remotes = await api.listRemotes();
       if (!remote && remotes.length > 0) remote = remotes[0].name;
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     }
     void load();
   });
@@ -74,7 +77,7 @@
 <Dialog title={heading} onClose={onCancel}>
   <div class="picker">
     <label class="row">
-      <span>Connection</span>
+      <span>{text.s.picker.storage}</span>
       <select value={remote} onchange={(event) => choose(event.currentTarget.value)}>
         {#each remotes as item (item.name)}
           <option value={item.name}>{item.name}</option>
@@ -89,26 +92,26 @@
       {/each}
     </nav>
 
-    {#if error}<p class="error" role="alert">{error}</p>{/if}
+    <ErrorNote {error} />
 
     <ul class="folders" aria-busy={loading}>
       {#if path !== ""}
-        <li><button class="folder" onclick={up}>↑ Up one level</button></li>
+        <li><button class="folder" onclick={up}><ArrowUp {...ICON} /> {text.s.picker.upOne}</button></li>
       {/if}
       {#each folders as folder (folder.path)}
         <li>
-          <button class="folder" onclick={() => { path = folder.path; void load(); }}>📁 {folder.name}</button>
+          <button class="folder" onclick={() => { path = folder.path; void load(); }}><Folder {...ICON} /> {folder.name}</button>
         </li>
       {/each}
       {#if !loading && folders.length === 0 && !error}
-        <li class="empty">No folders here.</li>
+        <li class="empty">{text.s.picker.noFolders}</li>
       {/if}
     </ul>
   </div>
 
   {#snippet actions()}
-    <button class="button" onclick={onCancel}>Cancel</button>
-    <button class="button primary" onclick={() => onChoose(remote, path)} disabled={!remote}>Choose this folder</button>
+    <button class="button" onclick={onCancel}>{text.s.common.cancel}</button>
+    <button class="button primary" onclick={() => onChoose(remote, path)} disabled={!remote}>{text.s.picker.choose}</button>
   {/snippet}
 </Dialog>
 
@@ -168,6 +171,13 @@
     background: none;
     padding: 7px 10px;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .folder :global(svg) {
+    color: var(--accent);
+    flex: none;
   }
   .folder:hover {
     background: var(--control-bg);
@@ -175,8 +185,5 @@
   .empty {
     padding: 10px;
     color: var(--text-secondary);
-  }
-  .error {
-    color: var(--status-disconnected);
   }
 </style>

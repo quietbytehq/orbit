@@ -5,6 +5,7 @@
 
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::rclone::{RcClient, Supervisor};
+use crate::text;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -92,16 +93,10 @@ pub fn support() -> MountSupport {
     let winfsp = winfsp_status();
     let (available, requirement) = match platform() {
         "linux" if fuse_available() => (true, None),
-        "linux" => (
-            false,
-            Some("Install FUSE 3 to mount remotes. On Ubuntu: sudo apt install fuse3."),
-        ),
+        "linux" => (false, Some(text::MOUNT_NEEDS_FUSE)),
         "windows" if winfsp == WinFspStatus::Installed => (true, None),
-        "windows" => (
-            false,
-            Some("Install WinFsp to mount remotes. It is free and takes a minute."),
-        ),
-        _ => (false, Some("Mounting is not available on this system.")),
+        "windows" => (false, Some(text::MOUNT_NEEDS_WINFSP)),
+        _ => (false, Some(text::MOUNT_UNSUPPORTED)),
     };
     MountSupport {
         platform: platform(),
@@ -151,15 +146,10 @@ pub fn winfsp_status() -> WinFspStatus {
 /// or the first free drive letter from Z: down on Windows.
 pub fn suggest_mount_point(remote: &str) -> AppResult<String> {
     if cfg!(windows) {
-        return first_free_drive_letter().ok_or_else(|| {
-            AppError::new(
-                ErrorKind::Unsupported,
-                "No drive letter is free for this mount.",
-            )
-        });
+        return first_free_drive_letter()
+            .ok_or_else(|| AppError::new(ErrorKind::Unsupported, text::MOUNT_NO_LETTER));
     }
-    let home = std::env::var_os("HOME")
-        .ok_or_else(|| AppError::internal("Could not find your home folder."))?;
+    let home = std::env::var_os("HOME").ok_or_else(|| AppError::internal(text::MOUNT_NO_HOME))?;
     let safe: String = remote
         .chars()
         .map(|c| {
@@ -240,9 +230,7 @@ fn ensure_available() -> AppResult<()> {
     }
     Err(AppError::new(
         ErrorKind::Unsupported,
-        support
-            .requirement
-            .unwrap_or("Mounting is not available on this system."),
+        support.requirement.unwrap_or(text::MOUNT_UNSUPPORTED),
     ))
 }
 
@@ -280,7 +268,7 @@ pub async fn mount_remote(
     ensure_available()?;
     let mount_point = mount_point.trim();
     if mount_point.is_empty() {
-        return Err(AppError::invalid("Choose where the remote should appear."));
+        return Err(AppError::invalid(text::MOUNT_WHERE));
     }
     mount(&supervisor.client()?, &remote, mount_point).await?;
     registry.remember(mount_point, &remote);

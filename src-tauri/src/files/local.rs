@@ -1,6 +1,7 @@
 //! Looks at files on this computer so uploads know which items are folders.
 
 use crate::error::{AppError, AppResult, ErrorKind};
+use crate::text;
 use serde::Serialize;
 use std::path::Path;
 
@@ -19,16 +20,17 @@ pub fn inspect(paths: &[String]) -> AppResult<Vec<LocalEntry>> {
         .map(|raw| {
             let path = Path::new(raw);
             let metadata = std::fs::metadata(path).map_err(|err| {
-                AppError::new(ErrorKind::Io, format!("Could not read {raw}: {err}"))
+                AppError::new(ErrorKind::Io, text::local_path_unreadable(raw))
+                    .with_details(err.to_string())
             })?;
             let name = path
                 .file_name()
                 .map(|name| name.to_string_lossy().into_owned())
-                .ok_or_else(|| AppError::invalid(format!("{raw} has no file name.")))?;
+                .ok_or_else(|| AppError::invalid(text::local_path_no_name(raw)))?;
             let parent = path
                 .parent()
                 .map(|parent| parent.to_string_lossy().into_owned())
-                .ok_or_else(|| AppError::invalid(format!("{raw} has no folder above it.")))?;
+                .ok_or_else(|| AppError::invalid(text::local_path_no_parent(raw)))?;
             Ok(LocalEntry {
                 parent,
                 name,

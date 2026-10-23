@@ -3,6 +3,7 @@ use super::providers::{self, AuthKind, ProviderDef};
 use super::{ConnectionTest, RemoteForm, RemoteSummary, oauth, store};
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::rclone::Supervisor;
+use crate::text;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use tauri::{AppHandle, Emitter, State};
@@ -37,20 +38,16 @@ fn summary(provider: &ProviderDef, name: &str) -> RemoteSummary {
 }
 
 fn credentials_provider(id: &str) -> AppResult<&'static ProviderDef> {
-    let provider = providers::find(id).ok_or_else(|| AppError::invalid("Unknown service."))?;
+    let provider = providers::find(id).ok_or_else(|| AppError::invalid(text::UNKNOWN_SERVICE))?;
     if provider.auth != AuthKind::Credentials {
-        return Err(AppError::invalid(
-            "This service signs in through the browser.",
-        ));
+        return Err(AppError::invalid(text::SERVICE_USES_BROWSER));
     }
     Ok(provider)
 }
 
 async fn ensure_name_free(client: &crate::rclone::RcClient, name: &str) -> AppResult<()> {
     if store::exists(client, name).await? {
-        return Err(AppError::invalid(format!(
-            "A connection named {name} already exists."
-        )));
+        return Err(AppError::invalid(text::name_taken(name)));
     }
     Ok(())
 }
@@ -107,11 +104,9 @@ pub async fn start_browser_sign_in(
     health: State<'_, HealthStore>,
 ) -> AppResult<RemoteSummary> {
     let provider = providers::find(&request.provider_id)
-        .ok_or_else(|| AppError::invalid("Unknown service."))?;
+        .ok_or_else(|| AppError::invalid(text::UNKNOWN_SERVICE))?;
     if provider.auth != AuthKind::Browser {
-        return Err(AppError::invalid(
-            "This service uses keys or a password, not a browser sign-in.",
-        ));
+        return Err(AppError::invalid(text::SERVICE_USES_CREDENTIALS));
     }
     let name = providers::validate_remote_name(&request.name)?;
     let params = providers::build_parameters(provider, &request.values, None)?;
@@ -140,7 +135,7 @@ pub async fn update_remote(
     let client = supervisor.client()?;
     let form = store::form(&client, &name).await?;
     let provider = providers::find(&form.provider_id)
-        .ok_or_else(|| AppError::new(ErrorKind::Unsupported, "Unknown service."))?;
+        .ok_or_else(|| AppError::new(ErrorKind::Unsupported, text::UNKNOWN_SERVICE))?;
     let params = providers::build_parameters(provider, &update.values, Some(&form.saved_secrets))?;
     store::update(&client, &name, &params).await?;
     health.forget(&name);

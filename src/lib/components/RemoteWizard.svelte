@@ -1,9 +1,11 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { openUrl } from "@tauri-apps/plugin-opener";
-  import { api, errorMessage, onSignInUrl } from "$lib/api";
-  import type { ConnectionTest, ProviderDef, RemoteForm } from "$lib/api/types";
+  import { api, asAppError, onSignInUrl } from "$lib/api";
+  import type { AppError, ConnectionTest, ProviderDef, RemoteForm } from "$lib/api/types";
+  import { text } from "$lib/text/index.svelte";
   import { isValidRemoteName } from "$lib/util/remote";
+  import ErrorNote from "./ErrorNote.svelte";
   import FieldInput from "./FieldInput.svelte";
 
   let { provider, existing = null }: { provider: ProviderDef; existing?: RemoteForm | null } = $props();
@@ -26,7 +28,7 @@
     ),
   );
   let busy = $state(false);
-  let error = $state<string | null>(null);
+  let error = $state<AppError | string | null>(null);
   let signInUrl = $state<string | null>(null);
   let result = $state<ConnectionTest | null>(null);
   let savedName = $state<string | null>(null);
@@ -52,7 +54,7 @@
   function nextFromName() {
     error = null;
     if (!nameValid) {
-      error = "Use 1 to 40 letters, numbers, dashes or underscores.";
+      error = text.s.wizard.nameInvalid;
       return;
     }
     step = isBrowser ? "sign-in" : "details";
@@ -71,7 +73,7 @@
       result = await api.testRemote(savedName);
       step = "result";
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     } finally {
       busy = false;
     }
@@ -87,7 +89,7 @@
       result = await api.testRemote(savedName);
       step = "result";
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
       step = "sign-in";
     } finally {
       busy = false;
@@ -123,7 +125,7 @@
       name = current;
       result = await api.testRemote(current);
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     } finally {
       busy = false;
     }
@@ -136,7 +138,7 @@
     try {
       result = await api.testRemote(existing.name);
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     } finally {
       busy = false;
     }
@@ -146,54 +148,56 @@
 {#if editing}
   <form class="card" onsubmit={(event) => { event.preventDefault(); void save(); }}>
     <div class="field">
-      <label for="remote-name">Name</label>
+      <label for="remote-name">{text.s.wizard.nameLabel}</label>
       <input id="remote-name" bind:value={name} disabled={busy} spellcheck="false" />
-      <p class="help">Renaming keeps the same settings and sign-in.</p>
+      <p class="help">{text.s.storage.renameHelp}</p>
     </div>
 
     {#if isBrowser}
-      <p class="help">
-        {provider.title} signs in through your browser. To change accounts, delete this connection and add it again.
-      </p>
+      <p class="help">{text.s.wizard.signInOnlyInBrowser(provider.title)}</p>
     {:else}
       {#each provider.fields as field (field.key)}
         <FieldInput {field} bind:value={values[field.key]} savedSecret={savedSecrets.includes(field.key)} disabled={busy} />
       {/each}
     {/if}
 
-    {#if error}<p class="error" role="alert">{error}</p>{/if}
+    <ErrorNote {error} />
     {#if result}
-      <p class={result.ok ? "success" : "error"} role="status">{result.message}</p>
+      {#if result.ok}
+        <p class="success" role="status">{result.message}</p>
+      {:else}
+        <ErrorNote error={{ kind: "rclone", message: result.message, details: result.details }} role="status" />
+      {/if}
     {/if}
 
     <div class="actions">
-      <button type="button" class="button" onclick={retest} disabled={busy}>Test connection</button>
+      <button type="button" class="button" onclick={retest} disabled={busy}>{text.s.wizard.testConnection}</button>
       <button type="submit" class="button primary" disabled={busy || !nameValid}>
-        {busy ? "Saving…" : "Save changes"}
+        {busy ? text.s.common.saving : text.s.common.save}
       </button>
     </div>
   </form>
 {:else}
   <div class="card">
     <ol class="steps" aria-label="Progress">
-      <li class:current={step === "name"} class:done={step !== "name"}>Name</li>
+      <li class:current={step === "name"} class:done={step !== "name"}>{text.s.wizard.steps.name}</li>
       <li class:current={step === "details" || step === "sign-in"} class:done={step === "result"}>
-        {isBrowser ? "Sign in" : "Details"}
+        {isBrowser ? text.s.wizard.steps.signIn : text.s.wizard.steps.details}
       </li>
-      <li class:current={step === "result"}>Check</li>
+      <li class:current={step === "result"}>{text.s.wizard.steps.check}</li>
     </ol>
 
     {#if step === "name"}
       <form onsubmit={(event) => { event.preventDefault(); nextFromName(); }}>
         <div class="field">
-          <label for="remote-name">What should this connection be called?</label>
-          <input id="remote-name" bind:value={name} placeholder="for example, Work Drive" spellcheck="false" />
-          <p class="help">Letters, numbers, dashes and underscores. Up to 40 characters.</p>
+          <label for="remote-name">{text.s.wizard.nameQuestion}</label>
+          <input id="remote-name" bind:value={name} placeholder={text.s.wizard.namePlaceholder} spellcheck="false" />
+          <p class="help">{text.s.wizard.nameHelp}</p>
         </div>
-        {#if error}<p class="error" role="alert">{error}</p>{/if}
+        <ErrorNote {error} />
         <div class="actions">
-          <a class="button" href="/remotes/new">Back</a>
-          <button type="submit" class="button primary" disabled={!nameValid}>Continue</button>
+          <a class="button" href="/remotes/new">{text.s.common.back}</a>
+          <button type="submit" class="button primary" disabled={!nameValid}>{text.s.common.continue}</button>
         </div>
       </form>
     {:else if step === "details"}
@@ -201,54 +205,52 @@
         {#each provider.fields as field (field.key)}
           <FieldInput {field} bind:value={values[field.key]} disabled={busy} />
         {/each}
-        {#if error}<p class="error" role="alert">{error}</p>{/if}
+        <ErrorNote {error} />
         <div class="actions">
-          <button type="button" class="button" onclick={() => (step = "name")} disabled={busy}>Back</button>
+          <button type="button" class="button" onclick={() => (step = "name")} disabled={busy}>{text.s.common.back}</button>
           <button type="submit" class="button primary" disabled={busy}>
-            {busy ? "Checking the connection…" : "Connect"}
+            {busy ? text.s.wizard.connecting : text.s.wizard.connect}
           </button>
         </div>
       </form>
     {:else if step === "sign-in"}
       <div class="sign-in">
-        <h2>Sign in to {provider.title}</h2>
+        <h2>{text.s.wizard.signInTitle(provider.title)}</h2>
         {#if busy}
-          <p class="help">
-            Finish signing in in your browser. Orbit will continue here when you are done.
-          </p>
+          <p class="help">{text.s.wizard.signInWaiting}</p>
           {#if signInUrl}
             <p class="url">
-              If the browser did not open, <a href={signInUrl} target="_blank" rel="noopener">open this link</a>.
+              {text.s.wizard.signInLinkIntro} <a href={signInUrl} target="_blank" rel="noopener">{text.s.wizard.signInLink}</a>.
             </p>
           {/if}
           <div class="actions">
-            <button type="button" class="button" onclick={cancelSignIn}>Cancel</button>
+            <button type="button" class="button" onclick={cancelSignIn}>{text.s.common.cancel}</button>
           </div>
         {:else}
-          <p class="help">{provider.tagline} Orbit opens your browser and uses rclone's standard sign-in.</p>
-          {#if error}<p class="error" role="alert">{error}</p>{/if}
+          <p class="help">{text.s.wizard.signInHelp(provider.tagline)}</p>
+          <ErrorNote {error} />
           <div class="actions">
-            <button type="button" class="button" onclick={() => (step = "name")}>Back</button>
-            <button type="button" class="button primary" onclick={signIn}>Sign in with {provider.title}</button>
+            <button type="button" class="button" onclick={() => (step = "name")}>{text.s.common.back}</button>
+            <button type="button" class="button primary" onclick={signIn}>{text.s.wizard.signInButton(provider.title)}</button>
           </div>
         {/if}
       </div>
     {:else if step === "result" && result}
       <div class="outcome">
         {#if result.ok}
-          <h2>{savedName} is connected</h2>
+          <h2>{text.s.wizard.connected(savedName ?? name)}</h2>
           <p class="success">{result.message}</p>
           <div class="actions">
-            <a class="button primary" href="/remotes">Done</a>
+            <a class="button primary" href="/remotes">{text.s.common.done}</a>
           </div>
         {:else}
-          <h2>{savedName} is saved, but the check failed</h2>
-          <p class="error">{result.message}</p>
-          <p class="help">You can fix the details now, or keep the connection and check it later.</p>
+          <h2>{text.s.wizard.savedButFailed(savedName ?? name)}</h2>
+          <ErrorNote error={{ kind: "rclone", message: result.message, details: result.details }} role="status" />
+          <p class="help">{text.s.wizard.savedButFailedHelp}</p>
           <div class="actions">
-            <a class="button" href="/remotes">Keep it for now</a>
+            <a class="button" href="/remotes">{text.s.wizard.keepForNow}</a>
             <button type="button" class="button primary" onclick={() => goto(`/remotes/${encodeURIComponent(savedName ?? "")}`)}>
-              Edit details
+              {text.s.wizard.editDetails}
             </button>
           </div>
         {/if}
@@ -285,10 +287,6 @@
     margin: 0;
     color: var(--text-secondary);
     font-size: 12px;
-  }
-  .error {
-    color: var(--status-disconnected);
-    margin: 0 0 12px;
   }
   .success {
     color: var(--status-synced);

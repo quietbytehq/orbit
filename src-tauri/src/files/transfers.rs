@@ -1,6 +1,7 @@
 //! Transfer queue. Each transfer runs as an async rclone job, and progress is read from the
 //! job's stats group. Up to `limit` transfers run at once; the rest wait in order.
 
+use crate::text;
 use super::{Endpoint, join, local_fs, remote_fs};
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::rclone::Supervisor;
@@ -47,7 +48,11 @@ pub enum State {
     Queued,
     Running,
     Done,
-    Failed { message: String },
+    Failed {
+        message: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        details: Option<String>,
+    },
     Cancelled,
 }
 
@@ -84,13 +89,13 @@ pub fn direction(request: &TransferRequest) -> AppResult<Direction> {
         (Endpoint::Remote { .. }, Endpoint::Remote { .. }, Mode::Copy) => Ok(Direction::Copy),
         (Endpoint::Remote { .. }, Endpoint::Remote { .. }, Mode::Move) => Ok(Direction::Move),
         (Endpoint::Local { .. }, _, Mode::Move) => Err(AppError::invalid(
-            "Files on this computer are uploaded, not moved.",
+            text::LOCAL_TO_REMOTE_IS_UPLOAD,
         )),
         (Endpoint::Remote { .. }, Endpoint::Local { .. }, Mode::Move) => Err(AppError::invalid(
-            "Downloads copy files. Delete the remote copy yourself if you want to move it.",
+            text::REMOTE_TO_LOCAL_IS_DOWNLOAD,
         )),
         (Endpoint::Local { .. }, Endpoint::Local { .. }, _) => Err(AppError::invalid(
-            "Orbit copies between this computer and a remote, not within this computer.",
+            text::LOCAL_TO_LOCAL_UNSUPPORTED,
         )),
     }
 }
@@ -115,7 +120,7 @@ pub fn build_call(request: &TransferRequest) -> AppResult<RcCall> {
     let is_move = request.mode == Mode::Move;
     if request.name.trim().is_empty() || request.name.contains('/') || request.name.contains('\\') {
         return Err(AppError::invalid(
-            "Choose a single file or folder to transfer.",
+            text::TRANSFER_ONE_ITEM,
         ));
     }
     if request.is_dir {
@@ -301,7 +306,7 @@ impl TransferQueue {
             let Some(entry) = inner.entries.iter_mut().find(|e| e.item.id == id) else {
                 return Err(AppError::new(
                     ErrorKind::InvalidInput,
-                    "That transfer is no longer in the queue.",
+                    text::TRANSFER_GONE,
                 ));
             };
             match entry.item.state {
@@ -372,6 +377,7 @@ impl TransferQueue {
                     Err(_) if entry.cancel_requested => State::Cancelled,
                     Err(err) => State::Failed {
                         message: err.message,
+                        details: err.details,
                     },
                 };
                 entry.item.speed = 0.0;
@@ -413,12 +419,11 @@ impl TransferQueue {
                 return if status.success {
                     Ok(())
                 } else {
-                    let message = if status.error.is_empty() {
-                        "The transfer failed.".to_owned()
+                    Err(if status.error.is_empty() {
+                        AppError::new(ErrorKind::Rclone, text::TRANSFER_FAILED)
                     } else {
-                        status.error
-                    };
-                    Err(AppError::new(ErrorKind::Rclone, message))
+                        text::engine_error(&status.error)
+                    })
                 };
             }
         }

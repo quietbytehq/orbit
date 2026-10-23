@@ -7,6 +7,7 @@ pub mod schedule;
 pub mod store;
 
 use crate::files::Endpoint;
+use crate::text;
 use serde::{Deserialize, Serialize};
 
 /// How many runs are kept per job. Older runs and their log files are removed.
@@ -56,7 +57,11 @@ pub struct Job {
 pub enum RunOutcome {
     Running,
     Succeeded,
-    Failed { message: String },
+    Failed {
+        message: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        details: Option<String>,
+    },
     Cancelled,
 }
 
@@ -120,20 +125,16 @@ pub fn validate(input: &JobInput) -> crate::error::AppResult<String> {
     use crate::error::AppError;
     let name = input.name.trim();
     if name.is_empty() {
-        return Err(AppError::invalid("Give this job a name."));
+        return Err(AppError::invalid(text::JOB_NAME_BLANK));
     }
     if name.chars().count() > 60 {
-        return Err(AppError::invalid("Job names can be up to 60 characters."));
+        return Err(AppError::invalid(text::JOB_NAME_TOO_LONG));
     }
     if let (Endpoint::Local { .. }, Endpoint::Local { .. }) = (&input.source, &input.destination) {
-        return Err(AppError::invalid(
-            "A job needs a remote on one side. Orbit does not sync within this computer.",
-        ));
+        return Err(AppError::invalid(text::JOB_NEEDS_CLOUD_SIDE));
     }
     if input.source == input.destination {
-        return Err(AppError::invalid(
-            "The source and destination must be different folders.",
-        ));
+        return Err(AppError::invalid(text::JOB_SAME_FOLDERS));
     }
     validate_schedule(input.schedule)?;
     Ok(name.to_owned())
@@ -144,16 +145,14 @@ pub fn validate_schedule(schedule: Schedule) -> crate::error::AppResult<()> {
     use crate::error::AppError;
     match schedule {
         Schedule::Manual => Ok(()),
-        Schedule::Every { minutes: 0 } => Err(AppError::invalid("Run at least one minute apart.")),
+        Schedule::Every { minutes: 0 } => Err(AppError::invalid(text::JOB_INTERVAL_TOO_SHORT)),
         Schedule::Every { minutes } if minutes > schedule::MAX_INTERVAL_MINUTES => {
-            Err(AppError::invalid(
-                "Runs can be up to seven days apart. For longer, run the job by hand.",
-            ))
+            Err(AppError::invalid(text::JOB_INTERVAL_TOO_LONG))
         }
         Schedule::Every { .. } => Ok(()),
-        Schedule::Daily { hour, minute } if hour > 23 || minute > 59 => Err(AppError::invalid(
-            "Choose a time of day between 00:00 and 23:59.",
-        )),
+        Schedule::Daily { hour, minute } if hour > 23 || minute > 59 => {
+            Err(AppError::invalid(text::JOB_BAD_TIME))
+        }
         Schedule::Daily { .. } => Ok(()),
     }
 }

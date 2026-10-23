@@ -1,6 +1,7 @@
 use super::client::RcClient;
 use super::process::{RcdProcess, RcdSpec};
 use crate::error::{AppError, AppResult, ErrorKind};
+use crate::text;
 use serde::Serialize;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -85,7 +86,7 @@ impl Supervisor {
             .read()
             .expect("client lock")
             .clone()
-            .ok_or_else(|| AppError::new(ErrorKind::NotRunning, "rclone is not running yet."))
+            .ok_or_else(|| AppError::new(ErrorKind::NotRunning, text::ENGINE_NOT_READY))
     }
 
     /// Restarts rcd with a new spec (for example after the rclone path changes).
@@ -188,18 +189,18 @@ async fn start(spec: &RcdSpec) -> AppResult<(RcdProcess, String)> {
     let deadline = tokio::time::Instant::now() + STARTUP_TIMEOUT;
     loop {
         if let Some(status) = process.try_exit_status()? {
-            return Err(AppError::new(
-                ErrorKind::NotRunning,
-                format!("rclone exited while starting ({status})."),
-            ));
+            return Err(
+                AppError::new(ErrorKind::NotRunning, text::ENGINE_EXITED_WHILE_STARTING)
+                    .with_details(format!("exit status {status}")),
+            );
         }
         match process.version().await {
             Ok(version) => return Ok((process, version)),
             Err(err) if tokio::time::Instant::now() >= deadline => {
-                return Err(AppError::new(
-                    ErrorKind::NotRunning,
-                    format!("rclone did not answer in time: {}", err.message),
-                ));
+                return Err(
+                    AppError::new(ErrorKind::NotRunning, text::ENGINE_SLOW_START)
+                        .with_details(err.details.unwrap_or(err.message)),
+                );
             }
             Err(_) => tokio::time::sleep(STARTUP_POLL).await,
         }
@@ -222,7 +223,7 @@ async fn monitor(process: &mut RcdProcess, rx: &mut mpsc::UnboundedReceiver<Comm
             }
             _ = ticker.tick() => {
                 match process.try_exit_status() {
-                    Ok(Some(status)) => return Monitor::Crashed(format!("rclone exited unexpectedly ({status}).")),
+                    Ok(Some(status)) => return Monitor::Crashed(format!("{} ({status})", text::ENGINE_EXITED)),
                     Ok(None) => {}
                     Err(err) => return Monitor::Crashed(err.message),
                 }
@@ -231,7 +232,7 @@ async fn monitor(process: &mut RcdProcess, rx: &mut mpsc::UnboundedReceiver<Comm
                     Err(_) => {
                         misses += 1;
                         if misses >= HEALTH_MISSES_BEFORE_RESTART {
-                            return Monitor::Crashed("rclone stopped answering health checks.".into());
+                            return Monitor::Crashed(text::ENGINE_UNRESPONSIVE.into());
                         }
                     }
                 }

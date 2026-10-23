@@ -1,10 +1,10 @@
-import { api, errorMessage, onJobs } from "$lib/api";
-import type { JobView } from "$lib/api/types";
+import { api, asAppError, onJobs } from "$lib/api";
+import type { AppError, JobView } from "$lib/api/types";
 
 /** Saved jobs and their live progress. The backend pushes every change. */
 class JobStore {
   items = $state<JobView[]>([]);
-  error = $state<string | null>(null);
+  error = $state<AppError | null>(null);
   #started = false;
 
   async start() {
@@ -20,7 +20,7 @@ class JobStore {
     try {
       this.items = await api.listJobs();
     } catch (err) {
-      this.error = errorMessage(err);
+      this.error = asAppError(err);
     }
   }
 
@@ -31,7 +31,7 @@ class JobStore {
       await action();
       return true;
     } catch (err) {
-      this.error = errorMessage(err);
+      this.error = asAppError(err);
       return false;
     }
   }

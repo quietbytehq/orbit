@@ -1,14 +1,15 @@
 <script lang="ts">
   import Dialog from "./Dialog.svelte";
+  import { text } from "$lib/text/index.svelte";
 
-  let { title, text, onClose }: { title: string; text: string | null; onClose: () => void } = $props();
+  let { title, text: body, onClose }: { title: string; text: string | null; onClose: () => void } = $props();
 </script>
 
 <Dialog {title} {onClose}>
-  {#if text === null}
-    <p>Loading the log…</p>
+  {#if body === null}
+    <p>{text.s.sync.loadingLog}</p>
   {:else}
-    <pre class="log">{text}</pre>
+    <pre class="log">{body}</pre>
   {/if}
 </Dialog>
 

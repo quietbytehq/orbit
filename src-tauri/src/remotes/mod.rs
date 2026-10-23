@@ -35,10 +35,12 @@ pub struct RemoteForm {
     pub saved_secrets: Vec<String>,
 }
 
-/// Result of a connection test.
+/// Result of a connection test. `details` holds the raw engine text when the test failed.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionTest {
     pub ok: bool,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<String>,
 }

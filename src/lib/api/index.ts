@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppError,
+  AppInfo,
   ConnectionTest,
   FileEntry,
   ItemRef,
@@ -34,6 +35,7 @@ export const api = {
   restartRcd: () => invoke<void>("restart_rcd"),
   splashFinished: () => invoke<void>("splash_finished"),
   getSplashPlan: () => invoke<SplashPlan>("get_splash_plan"),
+  appInfo: () => invoke<AppInfo>("app_info"),
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<Settings>("save_settings", { settings }),
 
@@ -107,4 +109,15 @@ export function errorMessage(err: unknown): string {
   if (isAppError(err)) return err.message;
   if (err instanceof Error) return err.message;
   return String(err);
+}
+
+/**
+ * Turns anything thrown into an AppError, so the UI can show the plain message and keep the
+ * technical text behind "Show details". Unknown errors are "internal" with the raw text as
+ * details and a generic message.
+ */
+export function asAppError(err: unknown): AppError {
+  if (isAppError(err)) return err;
+  const raw = err instanceof Error ? err.message : String(err);
+  return { kind: "internal", message: "Something went wrong inside Orbit. Try again.", details: raw };
 }

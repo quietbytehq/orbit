@@ -4,12 +4,14 @@
   import { rcd } from "$lib/stores/rcd.svelte";
   import { transfers } from "$lib/stores/transfers.svelte";
   import { settings } from "$lib/stores/settings.svelte";
+  import { text } from "$lib/text/index.svelte";
   import TransferPanel from "$lib/components/TransferPanel.svelte";
   import { ICON, NAV_ICONS } from "$lib/icons";
 
   let { children } = $props();
 
   onMount(() => {
+    void text.load();
     void rcd.start();
     void transfers.start();
     void settings.load();
@@ -20,20 +22,20 @@
     return href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
   }
 
-  const sections = [
-    { href: "/", label: "Overview" },
-    { href: "/remotes", label: "Remotes" },
-    { href: "/sync", label: "Sync" },
-    { href: "/mounts", label: "Mounts" },
-    { href: "/settings", label: "Settings" },
-  ];
+  const sections = $derived([
+    { href: "/", label: text.s.nav.overview },
+    { href: "/remotes", label: text.s.nav.storage },
+    { href: "/sync", label: text.s.nav.sync },
+    { href: "/mounts", label: text.s.nav.drives },
+    { href: "/settings", label: text.s.nav.settings },
+  ]);
 </script>
 
 <div class="shell">
   <aside class="sidebar" aria-label="Sections">
     <div class="brand">
       <img src="/favicon.png" alt="" width="22" height="22" />
-      <span>Orbit</span>
+      <span>{text.s.app.name}</span>
     </div>
     <nav>
       {#each sections as section (section.href)}
@@ -153,5 +155,16 @@
   :global(.button:disabled) {
     opacity: 0.5;
     cursor: default;
+  }
+  :global(.button.destructive) {
+    color: var(--status-disconnected);
+  }
+  :global(.button.destructive-fill) {
+    background: var(--status-disconnected);
+    color: #fff;
+  }
+  :global(a.button) {
+    text-decoration: none;
+    display: inline-block;
   }
 </style>

@@ -1,17 +1,19 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import ErrorNote from "$lib/components/ErrorNote.svelte";
   import StatusBadge from "$lib/components/StatusBadge.svelte";
-  import { api, errorMessage } from "$lib/api";
-  import type { RemoteSummary } from "$lib/api/types";
+  import { api, asAppError } from "$lib/api";
+  import type { AppError, RemoteSummary } from "$lib/api/types";
   import { jobs } from "$lib/stores/jobs.svelte";
   import { rcd } from "$lib/stores/rcd.svelte";
   import { transfers } from "$lib/stores/transfers.svelte";
+  import { text } from "$lib/text/index.svelte";
   import { remoteBadge, remotesInUse } from "$lib/util/remote";
   import { ICON, ICON_LG, Plus, providerIcon } from "$lib/icons";
 
   let remotes = $state<RemoteSummary[]>([]);
   let loading = $state(true);
-  let error = $state<string | null>(null);
+  let error = $state<AppError | null>(null);
   let testing = $state<Record<string, boolean>>({});
   const inUse = $derived(remotesInUse(transfers.items, jobs.items));
 
@@ -21,7 +23,7 @@
     try {
       remotes = await api.listRemotes();
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     } finally {
       loading = false;
     }
@@ -37,7 +39,7 @@
           : remote,
       );
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     } finally {
       testing[name] = false;
     }
@@ -49,7 +51,7 @@
     void jobs.start();
   });
 
-  // Reload when rclone comes back, since the list cannot be read while it is down.
+  // Reload when the engine comes back, since the list cannot be read while it is down.
   $effect(() => {
     if (rcd.state.state === "healthy" && !loading && remotes.length === 0 && error) {
       void load();
@@ -58,25 +60,24 @@
 </script>
 
 <div class="header">
-  <h1>Remotes</h1>
-  <a class="button primary with-icon" href="/remotes/new"><Plus {...ICON} />Add remote</a>
+  <h1>{text.s.storage.title}</h1>
+  <a class="button primary with-icon" href="/remotes/new"><Plus {...ICON} />{text.s.storage.add}</a>
 </div>
+<p class="intro">{text.s.storage.intro}</p>
 
 {#if rcd.state.state !== "healthy"}
-  <p class="notice">Orbit cannot reach rclone right now, so connections cannot be checked.</p>
+  <p class="notice">{text.s.storage.cannotCheck}</p>
 {/if}
 
-{#if error}
-  <p class="error" role="alert">{error}</p>
-{/if}
+<ErrorNote {error} />
 
 {#if loading}
-  <p class="help">Loading connections…</p>
+  <p class="help">{text.s.storage.loading}</p>
 {:else if remotes.length === 0}
   <section class="card empty">
-    <h2>No connections yet</h2>
-    <p>Add Google Drive, OneDrive, Dropbox, an S3 bucket or an SFTP server to get started.</p>
-    <a class="button primary" href="/remotes/new">Add your first remote</a>
+    <h2>{text.s.storage.emptyTitle}</h2>
+    <p>{text.s.storage.emptyBody}</p>
+    <a class="button primary" href="/remotes/new">{text.s.storage.addFirst}</a>
   </section>
 {:else}
   <ul class="list">
@@ -95,10 +96,10 @@
         <div class="side">
           {#if badge}<StatusBadge status={badge} />{/if}
           <button class="button" onclick={() => test(remote.name)} disabled={testing[remote.name]}>
-            {testing[remote.name] ? "Checking…" : "Test"}
+            {testing[remote.name] ? text.s.storage.checking : text.s.storage.check}
           </button>
-          <a class="button" href={`/browse/${encodeURIComponent(remote.name)}`}>Open</a>
-          <a class="button" href={`/remotes/${encodeURIComponent(remote.name)}`}>Edit</a>
+          <a class="button" href={`/browse/${encodeURIComponent(remote.name)}`}>{text.s.storage.open}</a>
+          <a class="button" href={`/remotes/${encodeURIComponent(remote.name)}`}>{text.s.storage.edit}</a>
         </div>
       </li>
     {/each}
@@ -110,10 +111,15 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 8px;
   }
   .header h1 {
     margin: 0;
+  }
+  .intro {
+    color: var(--text-secondary);
+    margin: 0 0 18px;
+    max-width: 640px;
   }
   .list {
     list-style: none;
@@ -172,12 +178,5 @@
   }
   .notice {
     color: var(--status-disconnected);
-  }
-  .error {
-    color: var(--status-disconnected);
-  }
-  :global(a.button) {
-    text-decoration: none;
-    display: inline-block;
   }
 </style>

@@ -1,10 +1,10 @@
-import { api, errorMessage, onTransfers } from "$lib/api";
-import type { TransferItem, TransferRequest } from "$lib/api/types";
+import { api, asAppError, onTransfers } from "$lib/api";
+import type { AppError, TransferItem, TransferRequest } from "$lib/api/types";
 
 /** The transfer queue as the UI sees it. The backend pushes every change. */
 class TransferStore {
   items = $state<TransferItem[]>([]);
-  error = $state<string | null>(null);
+  error = $state<AppError | null>(null);
   #started = false;
 
   /** Items still waiting or running. */
@@ -25,7 +25,7 @@ class TransferStore {
     try {
       this.items = await api.listTransfers();
     } catch (err) {
-      this.error = errorMessage(err);
+      this.error = asAppError(err);
     }
   }
 
@@ -35,7 +35,7 @@ class TransferStore {
       await api.enqueueTransfers(requests);
       return true;
     } catch (err) {
-      this.error = errorMessage(err);
+      this.error = asAppError(err);
       return false;
     }
   }
@@ -44,7 +44,7 @@ class TransferStore {
     try {
       await api.cancelTransfer(id);
     } catch (err) {
-      this.error = errorMessage(err);
+      this.error = asAppError(err);
     }
   }
 

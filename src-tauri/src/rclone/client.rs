@@ -1,4 +1,5 @@
 use crate::error::{AppError, AppResult, ErrorKind};
+use crate::text;
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use std::time::Duration;
@@ -75,29 +76,22 @@ impl RcClient {
             json!({})
         } else {
             serde_json::from_str(&body).map_err(|_| {
-                AppError::new(
-                    ErrorKind::Rclone,
-                    format!(
-                        "rclone returned an unreadable answer to {endpoint} (HTTP {})",
-                        status.as_u16()
-                    ),
-                )
+                AppError::new(ErrorKind::Rclone, text::ENGINE_BAD_ANSWER).with_details(format!(
+                    "unreadable answer to {endpoint} (HTTP {})",
+                    status.as_u16()
+                ))
             })?
         };
 
         if status.is_success() {
             Ok(parsed)
         } else {
-            Err(AppError::new(
-                ErrorKind::Rclone,
-                parsed
-                    .get("error")
-                    .and_then(Value::as_str)
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| {
-                        format!("rclone failed on {endpoint} (HTTP {})", status.as_u16())
-                    }),
-            ))
+            let raw = parsed
+                .get("error")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+                .unwrap_or_else(|| format!("{endpoint} failed (HTTP {})", status.as_u16()));
+            Err(text::engine_error(&raw))
         }
     }
 
@@ -110,12 +104,9 @@ impl RcClient {
 
 fn transport_error(err: reqwest::Error) -> AppError {
     if err.is_connect() || err.is_timeout() {
-        AppError::new(
-            ErrorKind::NotRunning,
-            "Orbit cannot reach rclone right now.",
-        )
+        AppError::new(ErrorKind::NotRunning, text::ENGINE_UNREACHABLE).with_details(err.to_string())
     } else {
-        AppError::new(ErrorKind::Rclone, format!("rclone request failed: {err}"))
+        AppError::new(ErrorKind::Rclone, text::ENGINE_REQUEST_FAILED).with_details(err.to_string())
     }
 }
 

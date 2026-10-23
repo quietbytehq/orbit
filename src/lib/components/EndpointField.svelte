@@ -3,7 +3,10 @@
   import DestinationPicker from "./DestinationPicker.svelte";
   import type { Endpoint } from "$lib/api/types";
   import { endpointLabel } from "$lib/util/endpoint";
-  import { errorMessage } from "$lib/api";
+  import { asAppError } from "$lib/api";
+  import type { AppError } from "$lib/api/types";
+  import { text } from "$lib/text/index.svelte";
+  import ErrorNote from "./ErrorNote.svelte";
 
   let {
     label,
@@ -18,7 +21,7 @@
   } = $props();
 
   let picking = $state(false);
-  let error = $state<string | null>(null);
+  let error = $state<AppError | null>(null);
 
   async function chooseLocalFolder() {
     error = null;
@@ -26,24 +29,24 @@
       const folder = await open({ directory: true, multiple: false });
       if (typeof folder === "string") onChange({ kind: "local", path: folder });
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     }
   }
 </script>
 
 <div class="endpoint">
   <span class="label">{label}</span>
-  <span class="value" class:empty={value === null}>{value ? endpointLabel(value) : "Not chosen yet"}</span>
+  <span class="value" class:empty={value === null}>{value ? endpointLabel(value) : text.s.picker.notChosen}</span>
   <div class="buttons">
-    <button type="button" class="button" onclick={() => (picking = true)} {disabled}>Remote folder…</button>
-    <button type="button" class="button" onclick={chooseLocalFolder} {disabled}>This computer…</button>
+    <button type="button" class="button" onclick={() => (picking = true)} {disabled}>{text.s.picker.cloudFolder}</button>
+    <button type="button" class="button" onclick={chooseLocalFolder} {disabled}>{text.s.picker.thisComputer}</button>
   </div>
-  {#if error}<p class="error" role="alert">{error}</p>{/if}
+  <div class="note"><ErrorNote {error} /></div>
 </div>
 
 {#if picking}
   <DestinationPicker
-    heading={`Choose ${label.toLowerCase()}`}
+    heading={text.s.picker.chooseLabel(label)}
     initialRemote={value?.kind === "remote" ? value.remote : ""}
     onChoose={(remote, path) => {
       onChange({ kind: "remote", remote, path });
@@ -82,9 +85,10 @@
     gap: 8px;
     flex-wrap: wrap;
   }
-  .error {
+  .note {
     grid-column: 2;
-    color: var(--status-disconnected);
-    margin: 0;
+  }
+  .note:empty {
+    display: none;
   }
 </style>

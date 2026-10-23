@@ -1,4 +1,5 @@
 use crate::error::{AppError, AppResult};
+use crate::text;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -100,10 +101,7 @@ impl Settings {
     /// Returns an error if a value is out of range.
     pub fn validate(&self) -> AppResult<()> {
         if self.transfer_concurrency == 0 || self.transfer_concurrency > Self::MAX_CONCURRENCY {
-            return Err(AppError::invalid(format!(
-                "Concurrent transfers must be between 1 and {}.",
-                Self::MAX_CONCURRENCY
-            )));
+            return Err(AppError::invalid(text::CONCURRENCY_RANGE));
         }
         Ok(())
     }
@@ -223,14 +221,30 @@ mod tests {
     #[test]
     fn full_intro_plays_on_first_launch_and_after_an_update() {
         let mut settings = Settings::default();
-        assert_eq!(settings.splash_plan("0.2.0"), SplashPlan::Full, "first launch");
+        assert_eq!(
+            settings.splash_plan("0.2.0"),
+            SplashPlan::Full,
+            "first launch"
+        );
         settings.last_splash_version = Some("0.2.0".into());
-        assert_eq!(settings.splash_plan("0.2.0"), SplashPlan::Short, "ordinary launch");
-        assert_eq!(settings.splash_plan("0.3.0"), SplashPlan::Full, "after an update");
+        assert_eq!(
+            settings.splash_plan("0.2.0"),
+            SplashPlan::Short,
+            "ordinary launch"
+        );
+        assert_eq!(
+            settings.splash_plan("0.3.0"),
+            SplashPlan::Full,
+            "after an update"
+        );
         settings.splash = SplashMode::Full;
         assert_eq!(settings.splash_plan("0.2.0"), SplashPlan::Full);
         settings.splash = SplashMode::Off;
         settings.last_splash_version = None;
-        assert_eq!(settings.splash_plan("0.2.0"), SplashPlan::Off, "off stays off");
+        assert_eq!(
+            settings.splash_plan("0.2.0"),
+            SplashPlan::Off,
+            "off stays off"
+        );
     }
 }

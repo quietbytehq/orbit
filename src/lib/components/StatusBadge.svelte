@@ -1,13 +1,15 @@
 <script lang="ts">
   import type { OverallStatus } from "$lib/api/types";
-  import { STATUS_COLOR_VAR, STATUS_LABEL } from "$lib/util/status";
+  import { text } from "$lib/text/index.svelte";
+  import { STATUS_COLOR_VAR } from "$lib/util/status";
 
   let { status, showLabel = true }: { status: OverallStatus; showLabel?: boolean } = $props();
+  const label = $derived(text.s.status[status]);
 </script>
 
-<span class="badge" data-status={status} title={STATUS_LABEL[status]}>
+<span class="badge" data-status={status} title={label}>
   <span class="dot" style:background={STATUS_COLOR_VAR[status]} aria-hidden="true"></span>
-  {#if showLabel}<span>{STATUS_LABEL[status]}</span>{:else}<span class="sr">{STATUS_LABEL[status]}</span>{/if}
+  {#if showLabel}<span>{label}</span>{:else}<span class="sr">{label}</span>{/if}
 </span>
 
 <style>

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { transfers } from "$lib/stores/transfers.svelte";
   import type { TransferItem } from "$lib/api/types";
+  import { text } from "$lib/text/index.svelte";
   import { formatBytes, formatDuration, formatSpeed } from "$lib/util/format";
 
   let expanded = $state(true);
-  const DIRECTION_LABEL = { upload: "Upload", download: "Download", copy: "Copy", move: "Move" } as const;
 
   function progress(item: TransferItem): number | null {
     if (item.totalBytes <= 0) return null;
@@ -12,21 +12,22 @@
   }
 
   function describe(item: TransferItem): string {
+    const t = text.s;
     switch (item.state.state) {
       case "queued":
-        return "Waiting";
+        return t.transfers.waiting;
       case "running": {
-        const amount = item.totalBytes > 0 ? `${formatBytes(item.bytes)} of ${formatBytes(item.totalBytes)}` : "Starting";
+        const amount = item.totalBytes > 0 ? t.sync.of(formatBytes(item.bytes), formatBytes(item.totalBytes)) : t.transfers.starting;
         const speed = item.speed > 0 ? ` · ${formatSpeed(item.speed)}` : "";
-        const eta = item.etaSeconds !== null ? ` · ${formatDuration(item.etaSeconds)} left` : "";
+        const eta = item.etaSeconds !== null ? ` · ${t.transfers.left(formatDuration(item.etaSeconds))}` : "";
         return `${amount}${speed}${eta}`;
       }
       case "done":
-        return "Done";
+        return t.transfers.done;
       case "failed":
         return item.state.message;
       case "cancelled":
-        return "Cancelled";
+        return t.transfers.cancelled;
     }
   }
 
@@ -34,14 +35,14 @@
 </script>
 
 {#if transfers.items.length > 0}
-  <section class="panel" aria-label="Transfers">
+  <section class="panel" aria-label={text.s.transfers.title}>
     <header>
       <button class="toggle" onclick={() => (expanded = !expanded)} aria-expanded={expanded}>
-        Transfers{transfers.active.length > 0 ? ` · ${transfers.active.length} in progress` : ""}
+        {text.s.transfers.title}{transfers.active.length > 0 ? ` · ${text.s.transfers.inProgress(transfers.active.length)}` : ""}
       </button>
       <span class="spacer"></span>
       {#if transfers.finished.length > 0}
-        <button class="link" onclick={() => transfers.clearFinished()}>Clear finished</button>
+        <button class="link" onclick={() => transfers.clearFinished()}>{text.s.transfers.clearFinished}</button>
       {/if}
     </header>
 
@@ -51,15 +52,18 @@
           {@const percent = progress(item)}
           <li data-state={item.state.state}>
             <div class="info">
-              <span class="name" title={item.name}>{DIRECTION_LABEL[item.direction]} · {item.name}</span>
+              <span class="name" title={item.name}>{text.s.transfers.direction[item.direction]} · {item.name}</span>
               <span class="route">{item.from} → {item.to}</span>
             </div>
             <div class="bar" aria-hidden="true">
               <div class:indeterminate={item.state.state === "running" && percent === null} style:width={percent !== null ? `${percent}%` : undefined}></div>
             </div>
-            <span class="status" class:failed={item.state.state === "failed"}>{describe(item)}</span>
+            <span
+              class="status"
+              class:failed={item.state.state === "failed"}
+              title={item.state.state === "failed" ? item.state.details : undefined}>{describe(item)}</span>
             {#if isActive(item)}
-              <button class="link" onclick={() => transfers.cancel(item.id)}>Cancel</button>
+              <button class="link" onclick={() => transfers.cancel(item.id)}>{text.s.transfers.cancel}</button>
             {:else}
               <span class="spacer-sm"></span>
             {/if}

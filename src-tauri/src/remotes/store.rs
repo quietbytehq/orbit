@@ -4,6 +4,7 @@ use super::providers;
 use super::{ConnectionTest, RemoteForm, RemoteSummary};
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::rclone::RcClient;
+use crate::text;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
@@ -58,17 +59,13 @@ async fn get_raw(client: &RcClient, name: &str) -> AppResult<BTreeMap<String, St
 /// Returns a remote's settings for the edit form. Secret values are withheld.
 pub async fn form(client: &RcClient, name: &str) -> AppResult<RemoteForm> {
     let raw = get_raw(client, name).await?;
-    let rclone_type = raw.get("type").cloned().ok_or_else(|| {
-        AppError::new(
-            ErrorKind::NotRunning,
-            format!("No remote named {name} was found."),
-        )
-    })?;
+    let rclone_type = raw
+        .get("type")
+        .cloned()
+        .ok_or_else(|| AppError::new(ErrorKind::InvalidInput, text::remote_missing(name)))?;
     let provider = providers::for_rclone_type(&rclone_type).ok_or_else(|| {
-        AppError::new(
-            ErrorKind::Unsupported,
-            format!("Orbit cannot edit {rclone_type} remotes yet."),
-        )
+        AppError::new(ErrorKind::Unsupported, text::CANNOT_EDIT_KIND)
+            .with_details(format!("rclone type {rclone_type}"))
     })?;
 
     let secret_keys: Vec<&str> = providers::secret_keys(provider).collect();
@@ -142,7 +139,7 @@ pub async fn rename(client: &RcClient, from: &str, to: &str) -> AppResult<()> {
     let mut raw = get_raw(client, from).await?;
     let rclone_type = raw
         .remove("type")
-        .ok_or_else(|| AppError::invalid(format!("No remote named {from} was found.")))?;
+        .ok_or_else(|| AppError::invalid(text::remote_missing(from)))?;
     let params: Map<String, Value> = raw
         .into_iter()
         .map(|(k, v)| (k, Value::String(v)))
@@ -173,51 +170,20 @@ pub async fn test(client: &RcClient, name: &str) -> AppResult<ConnectionTest> {
     Ok(match result {
         Ok(_) => ConnectionTest {
             ok: true,
-            message: "Connected.".to_owned(),
+            message: text::TEST_OK.to_owned(),
+            details: None,
         },
         Err(err) if err.kind == ErrorKind::NotRunning => return Err(err),
-        Err(err) => ConnectionTest {
-            ok: false,
-            message: friendly_connection_error(&err.message),
-        },
-    })
-}
-
-/// Turns rclone's technical errors into a sentence someone can act on.
-pub fn friendly_connection_error(raw: &str) -> String {
-    let lower = raw.to_lowercase();
-    let contains = |needles: &[&str]| needles.iter().any(|needle| lower.contains(needle));
-    if contains(&["no such host", "lookup "]) {
-        "Orbit could not find that server. Check the address.".to_owned()
-    } else if contains(&["connection refused"]) {
-        "The server refused the connection. Check the port, and that the service is running."
-            .to_owned()
-    } else if contains(&["timeout", "deadline exceeded", "timed out"]) {
-        "The server did not answer in time. Check your network connection and the address."
-            .to_owned()
-    } else if contains(&["x509", "certificate"]) {
-        "The server's security certificate could not be verified.".to_owned()
-    } else if contains(&[
-        "unauthorized",
-        "401",
-        "403",
-        "accessdenied",
-        "invalidaccesskeyid",
-        "signaturedoesnotmatch",
-        "permission denied",
-        "unable to authenticate",
-        "no supported methods remain",
-        "invalid_grant",
-    ]) {
-        "The sign-in details were not accepted. Check the password, key or access keys.".to_owned()
-    } else {
-        let mut message = "Orbit could not reach this connection.".to_owned();
-        let detail: String = raw.chars().take(240).collect();
-        if !detail.is_empty() {
-            message.push_str(&format!(" ({detail})"));
+        Err(err) => {
+            // The engine's raw text was already moved into details by the client.
+            let raw = err.details.unwrap_or(err.message);
+            ConnectionTest {
+                ok: false,
+                message: text::connection_failed(&raw).to_owned(),
+                details: Some(raw),
+            }
         }
-        message
-    }
+    })
 }
 
 #[cfg(test)]
@@ -225,25 +191,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn friendly_messages_cover_common_failures() {
+    fn connection_failures_get_a_plain_message_and_keep_the_detail() {
         assert!(
-            friendly_connection_error("dial tcp: lookup nope.example: no such host")
+            text::connection_failed("dial tcp: lookup nope.example: no such host")
                 .contains("find that server")
         );
-        assert!(
-            friendly_connection_error("dial tcp 1.2.3.4:22: connect: connection refused")
-                .contains("refused")
-        );
-        assert!(friendly_connection_error("context deadline exceeded").contains("in time"));
-        assert!(
-            friendly_connection_error("ssh: unable to authenticate").contains("sign-in details")
-        );
-        assert!(friendly_connection_error("SignatureDoesNotMatch").contains("sign-in details"));
-    }
-
-    #[test]
-    fn unknown_failures_keep_the_detail() {
-        let message = friendly_connection_error("something odd happened");
-        assert!(message.contains("something odd happened"));
+        assert!(text::connection_failed("something odd happened").contains("could not reach"));
     }
 }

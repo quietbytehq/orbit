@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { open } from "@tauri-apps/plugin-dialog";
-  import { errorMessage } from "$lib/api";
-  import type { RcloneLogLevel, Settings, SplashMode, Theme } from "$lib/api/types";
+  import ErrorNote from "$lib/components/ErrorNote.svelte";
+  import { asAppError } from "$lib/api";
+  import type { AppError, RcloneLogLevel, Settings, SplashMode, Theme } from "$lib/api/types";
   import { rcd } from "$lib/stores/rcd.svelte";
   import { settings } from "$lib/stores/settings.svelte";
+  import { text } from "$lib/text/index.svelte";
+  import { ICON, RefreshCw } from "$lib/icons";
 
-  let pathError = $state<string | null>(null);
+  let pathError = $state<AppError | null>(null);
 
   onMount(() => {
     void settings.load();
@@ -23,56 +26,53 @@
       const picked = await open({ multiple: false, directory: false });
       if (typeof picked === "string") update({ rclonePath: picked });
     } catch (err) {
-      pathError = errorMessage(err);
+      pathError = asAppError(err);
     }
   }
 
-  const THEMES: { value: Theme; label: string }[] = [
-    { value: "system", label: "Match the system" },
-    { value: "light", label: "Light" },
-    { value: "dark", label: "Dark" },
-  ];
+  const THEMES: Theme[] = ["system", "light", "dark"];
+  const SPLASH_MODES: SplashMode[] = ["full", "short", "off"];
+  const LOG_LEVELS: RcloneLogLevel[] = ["ERROR", "NOTICE", "INFO", "DEBUG"];
 
-  const SPLASH_MODES: { value: SplashMode; label: string; help: string }[] = [
-    { value: "full", label: "Full", help: "The whole intro, about 5 seconds, every time." },
-    { value: "short", label: "Short", help: "A quick version. The full intro still plays once after an install or update." },
-    { value: "off", label: "Off", help: "Open the main window straight away." },
-  ];
-
-  const LOG_LEVELS: { value: RcloneLogLevel; label: string }[] = [
-    { value: "ERROR", label: "Errors only" },
-    { value: "NOTICE", label: "Notices and errors" },
-    { value: "INFO", label: "Normal (recommended)" },
-    { value: "DEBUG", label: "Debug (large logs)" },
-  ];
+  const engineStatus = $derived(
+    rcd.state.state === "healthy"
+      ? text.s.settings.engineRunning(rcd.state.version)
+      : rcd.state.state === "starting"
+        ? text.s.overview.starting
+        : rcd.state.state === "restarting"
+          ? text.s.overview.restarting(rcd.state.attempt)
+          : rcd.state.state === "failed"
+            ? rcd.state.message
+            : text.s.overview.stopped,
+  );
 </script>
 
-<h1>Settings</h1>
+<h1>{text.s.settings.title}</h1>
 
-{#if settings.error}<p class="error" role="alert">{settings.error}</p>{/if}
+<ErrorNote error={settings.error} />
 
 {#if settings.value}
   {@const current = settings.value}
 
   <section class="card">
-    <h2>Appearance</h2>
+    <h2>{text.s.settings.appearance}</h2>
     <fieldset>
-      <legend class="sr">Colour scheme</legend>
-      {#each THEMES as option (option.value)}
+      <legend class="sr">{text.s.settings.colourScheme}</legend>
+      {#each THEMES as option (option)}
         <label class="option">
-          <input type="radio" name="theme" value={option.value} checked={current.theme === option.value} onchange={() => update({ theme: option.value })} />
-          <span>{option.label}</span>
+          <input type="radio" name="theme" value={option} checked={current.theme === option} onchange={() => update({ theme: option })} />
+          <span>{text.s.settings.themes[option]}</span>
         </label>
       {/each}
     </fieldset>
   </section>
 
   <section class="card">
-    <h2>Transfers</h2>
+    <h2>{text.s.settings.transfers}</h2>
     <label class="row">
       <span>
-        <span class="title">Files at the same time</span>
-        <span class="help">Each transfer uses bandwidth. Three is a good default for most connections.</span>
+        <span class="title">{text.s.settings.concurrency}</span>
+        <span class="help">{text.s.settings.concurrencyHelp}</span>
       </span>
       <select value={current.transferConcurrency} onchange={(event) => update({ transferConcurrency: Number(event.currentTarget.value) })}>
         {#each [1, 2, 3, 4, 5, 6, 7, 8] as count (count)}
@@ -83,56 +83,54 @@
   </section>
 
   <section class="card">
-    <h2>rclone</h2>
-    <p class="help">
-      Orbit runs the rclone version it ships with. Change this only if you need a specific build.
-    </p>
+    <h2>{text.s.settings.startup}</h2>
+    <fieldset>
+      <legend class="title">{text.s.settings.intro}</legend>
+      <p class="help">{text.s.settings.introHelp}</p>
+      {#each SPLASH_MODES as option (option)}
+        <label class="option">
+          <input type="radio" name="splash" value={option} checked={current.splash === option} onchange={() => update({ splash: option })} />
+          <span>{text.s.settings.splash[option]} <span class="help inline">{text.s.settings.splash[`${option}Help`]}</span></span>
+        </label>
+      {/each}
+    </fieldset>
+  </section>
+
+  <section class="card">
+    <h2>{text.s.settings.advanced}</h2>
+    <p class="help">{text.s.settings.engineIntro}</p>
 
     <div class="field">
-      <span class="title">Custom rclone program</span>
-      <span class="path" class:empty={!current.rclonePath}>{current.rclonePath ?? "Using the built-in rclone"}</span>
+      <span class="title">{text.s.settings.enginePath}</span>
+      <span class="path" class:empty={!current.rclonePath}>{current.rclonePath ?? text.s.settings.builtIn}</span>
       <div class="actions">
-        <button class="button" onclick={browseRclone}>Choose…</button>
+        <button class="button" onclick={browseRclone}>{text.s.settings.choose}</button>
         {#if current.rclonePath}
-          <button class="button" onclick={() => update({ rclonePath: null })}>Use built-in</button>
+          <button class="button" onclick={() => update({ rclonePath: null })}>{text.s.settings.useBuiltIn}</button>
         {/if}
       </div>
-      {#if pathError}<p class="error" role="alert">{pathError}</p>{/if}
+      <ErrorNote error={pathError} />
     </div>
 
     <label class="row">
       <span>
-        <span class="title">Log detail</span>
-        <span class="help">Written to the rclone log in your Orbit data folder.</span>
+        <span class="title">{text.s.settings.logDetail}</span>
+        <span class="help">{text.s.settings.logHelp}</span>
       </span>
       <select value={current.rcloneLogLevel} onchange={(event) => update({ rcloneLogLevel: event.currentTarget.value as RcloneLogLevel })}>
-        {#each LOG_LEVELS as level (level.value)}
-          <option value={level.value}>{level.label}</option>
+        {#each LOG_LEVELS as level (level)}
+          <option value={level}>{text.s.settings.logLevels[level]}</option>
         {/each}
       </select>
     </label>
 
     <div class="actions">
-      <span class="help">Status: {rcd.state.state === "healthy" ? `running (${rcd.state.version})` : rcd.state.state}</span>
-      <button class="button" onclick={() => rcd.restart()}>Restart rclone</button>
+      <span class="help">{text.s.settings.engineStatus(engineStatus)}</span>
+      <button class="button with-icon" onclick={() => rcd.restart()}><RefreshCw {...ICON} />{text.s.settings.restartEngine}</button>
     </div>
   </section>
-
-  <section class="card">
-    <h2>Startup</h2>
-    <fieldset>
-      <legend class="title">Intro animation</legend>
-      <p class="help">Applies the next time Orbit starts. Click or press a key during the intro to skip it.</p>
-      {#each SPLASH_MODES as option (option.value)}
-        <label class="option">
-          <input type="radio" name="splash" value={option.value} checked={current.splash === option.value} onchange={() => update({ splash: option.value })} />
-          <span>{option.label} <span class="help inline">{option.help}</span></span>
-        </label>
-      {/each}
-    </fieldset>
-  </section>
 {:else}
-  <p class="help">Loading settings…</p>
+  <p class="help">{text.s.settings.loading}</p>
 {/if}
 
 <style>
@@ -212,10 +210,6 @@
     border-radius: var(--radius-control);
     padding: 5px 8px;
     flex: none;
-  }
-  .error {
-    color: var(--status-disconnected);
-    margin: 0;
   }
   .sr {
     position: absolute;

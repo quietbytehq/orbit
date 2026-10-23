@@ -7,6 +7,7 @@
 use super::store;
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::rclone::RcClient;
+use crate::text;
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -54,7 +55,8 @@ pub async fn create_with_browser(
                 // leaves an empty remote behind. The name was free before we started, so remove it.
                 discard_stub(client, name).await;
                 return Err(if err.kind == ErrorKind::Rclone {
-                    AppError::new(ErrorKind::Rclone, format!("Sign-in did not finish: {}", err.message))
+                    AppError::new(ErrorKind::Rclone, text::SIGN_IN_FAILED)
+                        .with_details(err.details.unwrap_or(err.message))
                 } else {
                     err
                 });

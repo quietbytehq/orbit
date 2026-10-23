@@ -1,8 +1,10 @@
 <script lang="ts">
   import Dialog from "./Dialog.svelte";
   import EndpointField from "./EndpointField.svelte";
-  import { api, errorMessage } from "$lib/api";
-  import type { Endpoint, JobInput, JobKind, JobView, Schedule } from "$lib/api/types";
+  import ErrorNote from "./ErrorNote.svelte";
+  import { api, asAppError } from "$lib/api";
+  import type { AppError, Endpoint, JobInput, JobKind, JobView, Schedule } from "$lib/api/types";
+  import { text } from "$lib/text/index.svelte";
   import { intervalMinutes, intervalParts, parseTime, timeValue, type IntervalUnit } from "$lib/util/schedule";
 
   let {
@@ -34,13 +36,13 @@
     initialSchedule.kind === "daily" ? timeValue(initialSchedule.hour, initialSchedule.minute) : "09:00",
   );
   let busy = $state(false);
-  let error = $state<string | null>(null);
+  let error = $state<AppError | string | null>(null);
 
-  const SCHEDULE_TEXT: Record<Schedule["kind"], { title: string; help: string }> = {
-    manual: { title: "Only when I run it", help: "Nothing happens until you press Run now." },
-    every: { title: "Every…", help: "Repeats while Orbit is open, counted from the last run." },
-    daily: { title: "Daily at…", help: "Once a day at this time, if Orbit is open then." },
-  };
+  const SCHEDULE_TEXT = $derived<Record<Schedule["kind"], { title: string; help: string }>>({
+    manual: { title: text.s.jobForm.manualTitle, help: text.s.jobForm.manualHelp },
+    every: { title: text.s.jobForm.everyTitle, help: text.s.jobForm.everyHelp },
+    daily: { title: text.s.jobForm.dailyTitle, help: text.s.jobForm.dailyHelp },
+  });
 
   /** Reads the schedule from the form. Returns a message instead when the values do not make sense. */
   function readSchedule(): Schedule | string {
@@ -49,29 +51,23 @@
         return { kind: "manual" };
       case "every": {
         const minutes = intervalMinutes(intervalValue, intervalUnit);
-        return minutes === null ? "Choose a whole number of minutes or hours, up to seven days." : { kind: "every", minutes };
+        return minutes === null ? text.s.jobForm.badInterval : { kind: "every", minutes };
       }
       case "daily": {
         const time = parseTime(dailyTime);
-        return time === null ? "Choose a time of day." : { kind: "daily", ...time };
+        return time === null ? text.s.jobForm.badTime : { kind: "daily", ...time };
       }
     }
   }
 
-  const KIND_TEXT: Record<JobKind, { title: string; help: string }> = {
-    copy: {
-      title: "Copy",
-      help: "Adds new and changed files to the destination. Nothing is deleted.",
-    },
-    sync: {
-      title: "Sync",
-      help: "Makes the destination match the source. Files in the destination that are not in the source are deleted.",
-    },
-  };
+  const KIND_TEXT = $derived<Record<JobKind, { title: string; help: string }>>({
+    copy: { title: text.s.jobForm.copyTitle, help: text.s.jobForm.copyHelp },
+    sync: { title: text.s.jobForm.mirrorTitle, help: text.s.jobForm.mirrorHelp },
+  });
 
   async function save() {
     if (!source || !destination) {
-      error = "Choose both the source and the destination.";
+      error = text.s.jobForm.chooseBoth;
       return;
     }
     const schedule = readSchedule();
@@ -86,14 +82,14 @@
       const view = existing ? await api.updateJob(existing.id, input) : await api.createJob(input);
       onSaved(view);
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     } finally {
       busy = false;
     }
   }
 </script>
 
-<Dialog title={existing ? "Edit job" : "New job"} onClose={onCancel}>
+<Dialog title={existing ? text.s.jobForm.editTitle : text.s.jobForm.newTitle} onClose={onCancel}>
   <form
     class="form"
     onsubmit={(event) => {
@@ -102,12 +98,12 @@
     }}
   >
     <div class="field">
-      <label for="job-name">Name</label>
-      <input id="job-name" bind:value={name} placeholder="for example, Photos backup" disabled={busy} />
+      <label for="job-name">{text.s.jobForm.name}</label>
+      <input id="job-name" bind:value={name} placeholder={text.s.jobForm.namePlaceholder} disabled={busy} />
     </div>
 
     <fieldset class="kinds" disabled={busy}>
-      <legend>What should happen</legend>
+      <legend>{text.s.jobForm.whatHappens}</legend>
       {#each ["copy", "sync"] as const as option (option)}
         <label class="kind" class:selected={kind === option}>
           <input type="radio" name="kind" value={option} bind:group={kind} />
@@ -118,16 +114,14 @@
     </fieldset>
 
     {#if kind === "sync"}
-      <p class="warning" role="note">
-        Sync deletes files in the destination that are missing from the source. Check the destination before you run it.
-      </p>
+      <p class="warning" role="note">{text.s.jobForm.mirrorWarning}</p>
     {/if}
 
-    <EndpointField label="Source" value={source} onChange={(endpoint) => (source = endpoint)} disabled={busy} />
-    <EndpointField label="Destination" value={destination} onChange={(endpoint) => (destination = endpoint)} disabled={busy} />
+    <EndpointField label={text.s.jobForm.source} value={source} onChange={(endpoint) => (source = endpoint)} disabled={busy} />
+    <EndpointField label={text.s.jobForm.destination} value={destination} onChange={(endpoint) => (destination = endpoint)} disabled={busy} />
 
     <fieldset class="kinds" disabled={busy}>
-      <legend>When to run</legend>
+      <legend>{text.s.jobForm.whenToRun}</legend>
       {#each ["manual", "every", "daily"] as const as option (option)}
         <label class="kind" class:selected={scheduleKind === option}>
           <input type="radio" name="schedule" value={option} bind:group={scheduleKind} />
@@ -141,30 +135,30 @@
                 min="1"
                 step="1"
                 inputmode="numeric"
-                aria-label="Run every"
+                aria-label={text.s.jobForm.runEvery}
                 bind:value={intervalValue}
               />
-              <select aria-label="Unit" bind:value={intervalUnit}>
-                <option value="minutes">minutes</option>
-                <option value="hours">hours</option>
+              <select aria-label={text.s.jobForm.unit} bind:value={intervalUnit}>
+                <option value="minutes">{text.s.jobForm.minutes}</option>
+                <option value="hours">{text.s.jobForm.hours}</option>
               </select>
             </span>
           {:else if option === "daily" && scheduleKind === "daily"}
             <span class="kind-controls">
-              <input type="time" aria-label="Time of day" bind:value={dailyTime} />
+              <input type="time" aria-label={text.s.jobForm.timeOfDay} bind:value={dailyTime} />
             </span>
           {/if}
         </label>
       {/each}
     </fieldset>
-    <p class="note">Schedules only run while Orbit is open. A run missed while it was closed is not made up.</p>
+    <p class="note">{text.s.jobForm.scheduleNote}</p>
 
-    {#if error}<p class="error" role="alert">{error}</p>{/if}
+    <ErrorNote {error} />
 
     <div class="actions">
-      <button type="button" class="button" onclick={onCancel} disabled={busy}>Cancel</button>
+      <button type="button" class="button" onclick={onCancel} disabled={busy}>{text.s.common.cancel}</button>
       <button type="submit" class="button primary" disabled={busy || !name.trim()}>
-        {busy ? "Saving…" : existing ? "Save changes" : "Create job"}
+        {busy ? text.s.common.saving : existing ? text.s.common.save : text.s.jobForm.create}
       </button>
     </div>
   </form>
@@ -257,10 +251,6 @@
     background: rgba(255, 149, 0, 0.14);
     color: var(--text-primary);
     font-size: 12px;
-  }
-  .error {
-    color: var(--status-disconnected);
-    margin: 0;
   }
   .actions {
     display: flex;

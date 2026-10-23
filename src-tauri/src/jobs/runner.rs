@@ -9,6 +9,7 @@ use crate::files::endpoint_fs;
 use crate::paths::AppPaths;
 use crate::rclone::RcdState;
 use crate::rclone::Supervisor;
+use crate::text;
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashMap;
@@ -42,6 +43,9 @@ pub struct Runner {
     jobs_file: PathBuf,
     logs_dir: PathBuf,
     state: Mutex<State>,
+    /// Held for the whole of a save, so two saves cannot race on the temp file or write an
+    /// older snapshot after a newer one.
+    persist_lock: Mutex<()>,
     on_change: ChangeHook,
 }
 
@@ -112,6 +116,7 @@ impl Runner {
                 running: HashMap::new(),
                 armed,
             }),
+            persist_lock: Mutex::new(()),
             on_change: Arc::new(on_change),
         });
         runner.persist()?;
@@ -199,7 +204,7 @@ impl Runner {
         let view = {
             let mut state = self.state.lock().expect("jobs lock");
             if state.running.contains_key(id) {
-                return Err(AppError::invalid("Stop this job before changing it."));
+                return Err(AppError::invalid(text::JOB_RUNNING_EDIT));
             }
             let job = find_mut(&mut state.jobs, id)?;
             job.name = name;
@@ -236,12 +241,12 @@ impl Runner {
         {
             let mut state = self.state.lock().expect("jobs lock");
             if state.running.contains_key(id) {
-                return Err(AppError::invalid("Stop this job before deleting it."));
+                return Err(AppError::invalid(text::JOB_RUNNING_DELETE));
             }
             let before = state.jobs.len();
             state.jobs.retain(|job| job.id != id);
             if state.jobs.len() == before {
-                return Err(AppError::invalid("That job no longer exists."));
+                return Err(AppError::invalid(text::JOB_GONE));
             }
             state.armed.remove(id);
         }
@@ -260,14 +265,14 @@ impl Runner {
         let job = {
             let mut state = self.state.lock().expect("jobs lock");
             if state.running.contains_key(id) {
-                return Err(AppError::invalid("This job is already running."));
+                return Err(AppError::invalid(text::JOB_ALREADY_RUNNING));
             }
             let job = state
                 .jobs
                 .iter()
                 .find(|job| job.id == id)
                 .cloned()
-                .ok_or_else(|| AppError::invalid("That job no longer exists."))?;
+                .ok_or_else(|| AppError::invalid(text::JOB_GONE))?;
             state.running.insert(
                 id.to_owned(),
                 Running {
@@ -296,7 +301,7 @@ impl Runner {
             let running = state
                 .running
                 .get_mut(id)
-                .ok_or_else(|| AppError::invalid("This job is not running."))?;
+                .ok_or_else(|| AppError::invalid(text::JOB_NOT_RUNNING))?;
             running.cancel_requested = true;
             running.rc_job_id
         };
@@ -317,15 +322,15 @@ impl Runner {
                 .jobs
                 .iter()
                 .find(|job| job.id == job_id)
-                .ok_or_else(|| AppError::invalid("That job no longer exists."))?;
+                .ok_or_else(|| AppError::invalid(text::JOB_GONE))?;
             job.runs
                 .iter()
                 .find(|run| run.id == run_id)
                 .map(|run| run.log_file.clone())
-                .ok_or_else(|| AppError::invalid("That run is no longer in the history."))?
+                .ok_or_else(|| AppError::invalid(text::RUN_GONE))?
         };
         let text = fs::read_to_string(self.logs_dir.join(&file_name)).map_err(|err| {
-            AppError::new(ErrorKind::Io, format!("Could not read the log: {err}"))
+            AppError::new(ErrorKind::Io, text::LOG_UNREADABLE).with_details(err.to_string())
         })?;
         if text.len() <= LOG_VIEW_LIMIT {
             return Ok(text);
@@ -334,10 +339,7 @@ impl Runner {
         while !text.is_char_boundary(start) {
             start += 1;
         }
-        Ok(format!(
-            "…earlier lines are in the log file…\n{}",
-            &text[start..]
-        ))
+        Ok(format!("{}\n{}", text::LOG_TRUNCATED, &text[start..]))
     }
 
     async fn execute(self: Arc<Self>, job: Job, run_id: String, scheduled: bool) {
@@ -368,6 +370,7 @@ impl Runner {
             Err(err) => (
                 RunOutcome::Failed {
                     message: err.message,
+                    details: err.details,
                 },
                 0,
                 0,
@@ -385,9 +388,15 @@ impl Runner {
             }
         };
         log.line(&match &outcome {
-            RunOutcome::Succeeded => "Finished. Everything was transferred.".to_owned(),
-            RunOutcome::Cancelled => "Stopped by you.".to_owned(),
-            RunOutcome::Failed { message } => format!("Finished with a problem: {message}"),
+            RunOutcome::Succeeded => text::LOG_FINISHED_OK.to_owned(),
+            RunOutcome::Cancelled => text::LOG_STOPPED.to_owned(),
+            RunOutcome::Failed { message, details } => {
+                let mut line = text::log_finished_with_problem(message);
+                if let Some(details) = details {
+                    line.push_str(&format!(" [{details}]"));
+                }
+                line
+            }
             RunOutcome::Running => "Finished.".to_owned(),
         });
 
@@ -455,12 +464,17 @@ impl Runner {
                 let outcome = if status.success {
                     RunOutcome::Succeeded
                 } else {
-                    let message = if status.error.is_empty() {
-                        "rclone reported a problem.".to_owned()
+                    if status.error.is_empty() {
+                        RunOutcome::Failed {
+                            message: text::RUN_PROBLEM.to_owned(),
+                            details: None,
+                        }
                     } else {
-                        status.error
-                    };
-                    RunOutcome::Failed { message }
+                        RunOutcome::Failed {
+                            message: text::explain_engine_error(&status.error).to_owned(),
+                            details: Some(status.error),
+                        }
+                    }
                 };
                 return Ok((outcome, stats.transfers, stats.bytes, stats.errors));
             }
@@ -499,6 +513,7 @@ impl Runner {
     }
 
     fn persist(&self) -> AppResult<()> {
+        let _writing = self.persist_lock.lock().expect("persist lock");
         let jobs = self.state.lock().expect("jobs lock").jobs.clone();
         store::save(&self.jobs_file, &jobs)
     }
@@ -541,7 +556,8 @@ pub fn recover_interrupted(jobs: &mut [Job]) {
     for run in jobs.iter_mut().flat_map(|job| job.runs.iter_mut()) {
         if run.outcome == RunOutcome::Running {
             run.outcome = RunOutcome::Failed {
-                message: "Orbit closed before this run finished.".into(),
+                message: text::RUN_INTERRUPTED.into(),
+                details: None,
             };
             run.finished_at = Some(run.started_at);
         }
@@ -551,7 +567,7 @@ pub fn recover_interrupted(jobs: &mut [Job]) {
 fn find_mut<'a>(jobs: &'a mut [Job], id: &str) -> AppResult<&'a mut Job> {
     jobs.iter_mut()
         .find(|job| job.id == id)
-        .ok_or_else(|| AppError::invalid("That job no longer exists."))
+        .ok_or_else(|| AppError::invalid(text::JOB_GONE))
 }
 
 fn describe(endpoint: &crate::files::Endpoint) -> String {

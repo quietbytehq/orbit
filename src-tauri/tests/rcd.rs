@@ -120,7 +120,7 @@ async fn supervisor_gives_up_after_retry_budget() {
     .await;
     match state {
         RcdState::Failed { message } => {
-            assert!(message.contains("Could not start rclone"), "{message}")
+            assert!(message.contains("could not start"), "{message}")
         }
         other => panic!("expected Failed, got {other:?}"),
     }

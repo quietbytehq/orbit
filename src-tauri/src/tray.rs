@@ -140,7 +140,7 @@ impl TrayHandle {
 
 /// Creates the tray icon and its menu. Call once from setup.
 pub fn install(app: &AppHandle, variant: Variant) -> tauri::Result<()> {
-    let status_item = MenuItem::with_id(app, MENU_STATUS, "Starting rclone…", false, None::<&str>)?;
+    let status_item = MenuItem::with_id(app, MENU_STATUS, "Starting…", false, None::<&str>)?;
     let show = MenuItem::with_id(app, MENU_SHOW, "Show Orbit", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, MENU_QUIT, "Quit Orbit", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
@@ -187,7 +187,7 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>, rcd: &RcdState, overall: OverallS
         .icon
         .set_icon(Some(tray_image(tray.variant, state).expect("bundled tray icon is valid")));
     let description = match rcd {
-        RcdState::Starting | RcdState::Stopped => "Starting rclone…".to_owned(),
+        RcdState::Starting | RcdState::Stopped => "Starting…".to_owned(),
         _ => status::describe(overall).to_owned(),
     };
     let _ = tray

@@ -1,6 +1,7 @@
 use super::client::{Endpoint, RcClient};
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::settings::LogLevel;
+use crate::text;
 use rand::distr::{Alphanumeric, SampleString};
 use serde::Deserialize;
 use serde_json::json;
@@ -72,10 +73,8 @@ impl RcdProcess {
         ask_kernel_to_end_child_with_parent(&mut command);
 
         let child = command.spawn().map_err(|err| {
-            AppError::new(
-                ErrorKind::NotRunning,
-                format!("Could not start rclone ({}): {err}", spec.binary.display()),
-            )
+            AppError::new(ErrorKind::NotRunning, text::ENGINE_COULD_NOT_START)
+                .with_details(format!("{}: {err}", spec.binary.display()))
         })?;
         #[cfg(windows)]
         let job = job::KillOnClose::for_child(&child)?;
@@ -251,6 +250,12 @@ mod tests {
         };
         let err = RcdProcess::spawn(&spec).err().expect("spawn should fail");
         assert_eq!(err.kind, ErrorKind::NotRunning);
-        assert!(err.message.contains("Could not start rclone"));
+        assert_eq!(err.message, text::ENGINE_COULD_NOT_START);
+        assert!(
+            err.details
+                .as_deref()
+                .unwrap_or("")
+                .contains("does-not-exist")
+        );
     }
 }

@@ -1,16 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import Dialog from "$lib/components/Dialog.svelte";
+  import ErrorNote from "$lib/components/ErrorNote.svelte";
   import JobForm from "$lib/components/JobForm.svelte";
   import LogDialog from "$lib/components/LogDialog.svelte";
-  import { api, errorMessage } from "$lib/api";
+  import { api, asAppError } from "$lib/api";
   import type { JobView, RunOutcome } from "$lib/api/types";
   import { jobs } from "$lib/stores/jobs.svelte";
   import { rcd } from "$lib/stores/rcd.svelte";
+  import { text } from "$lib/text/index.svelte";
   import { endpointLabel } from "$lib/util/endpoint";
+  import { formatBytes, formatDuration, formatSpeed, timeAgo } from "$lib/util/format";
   import { nextRunLabel, scheduleLabel } from "$lib/util/schedule";
   import { Copy, FolderSync, ICON, Pencil, Play, Plus, Square, Trash } from "$lib/icons";
-  import { formatBytes, formatDuration, formatSpeed, timeAgo } from "$lib/util/format";
 
   let creating = $state(false);
   let editing = $state<JobView | null>(null);
@@ -28,16 +29,7 @@
   });
 
   function outcomeLabel(outcome: RunOutcome): string {
-    switch (outcome.state) {
-      case "running":
-        return "Running";
-      case "succeeded":
-        return "Finished";
-      case "failed":
-        return "Problem";
-      case "cancelled":
-        return "Stopped";
-    }
+    return text.s.sync.outcome[outcome.state];
   }
 
   function outcomeTitle(outcome: RunOutcome): string {
@@ -45,12 +37,12 @@
   }
 
   async function openLog(job: JobView, runId: string, startedAt: number) {
-    logTitle = `${job.name}, ${new Date(startedAt * 1000).toLocaleString()}`;
+    logTitle = text.s.sync.logTitle(job.name, new Date(startedAt * 1000).toLocaleString());
     logText = null;
     try {
       logText = await api.readJobLog(job.id, runId);
     } catch (err) {
-      logText = errorMessage(err);
+      logText = asAppError(err).message;
     }
   }
 
@@ -67,25 +59,22 @@
 </script>
 
 <div class="header">
-  <h1>Sync</h1>
-  <button class="button primary with-icon" onclick={() => (creating = true)}><Plus {...ICON} />New job</button>
+  <h1>{text.s.sync.title}</h1>
+  <button class="button primary with-icon" onclick={() => (creating = true)}><Plus {...ICON} />{text.s.sync.newJob}</button>
 </div>
 
-<p class="help">
-  Jobs copy or sync folders between a remote and this computer, or between two remotes. Each run is recorded here with
-  its log.
-</p>
+<p class="help">{text.s.sync.intro}</p>
 
 {#if rcd.state.state !== "healthy"}
-  <p class="notice">Orbit cannot reach rclone right now, so jobs cannot run.</p>
+  <p class="notice">{text.s.sync.cannotRun}</p>
 {/if}
-{#if jobs.error}<p class="error" role="alert">{jobs.error}</p>{/if}
+<ErrorNote error={jobs.error} />
 
 {#if jobs.items.length === 0}
   <section class="card empty">
-    <h2>No jobs yet</h2>
-    <p>Create a job to copy a folder to a remote, keep a backup in sync, or pull a remote folder down to this computer.</p>
-    <button class="button primary" onclick={() => (creating = true)}>Create your first job</button>
+    <h2>{text.s.sync.emptyTitle}</h2>
+    <p>{text.s.sync.emptyBody}</p>
+    <button class="button primary" onclick={() => (creating = true)}>{text.s.sync.createFirst}</button>
   </section>
 {:else}
   <ul class="list">
@@ -95,7 +84,7 @@
         <div class="top">
           <div class="title">
             <span class="name">{view.name}</span>
-            <span class="pill with-icon">{#if view.kind === "sync"}<FolderSync size={12} strokeWidth={2} aria-hidden="true" />Sync{:else}<Copy size={12} strokeWidth={2} aria-hidden="true" />Copy{/if}</span>
+            <span class="pill with-icon">{#if view.kind === "sync"}<FolderSync size={12} strokeWidth={2} aria-hidden="true" />{text.s.sync.kindSync}{:else}<Copy size={12} strokeWidth={2} aria-hidden="true" />{text.s.sync.kindCopy}{/if}</span>
             {#if view.schedule.kind !== "manual"}<span class="pill">{scheduleLabel(view.schedule)}</span>{/if}
           </div>
           <label class="toggle">
@@ -104,7 +93,7 @@
               checked={view.enabled}
               onchange={(event) => jobs.act(() => api.setJobEnabled(view.id, event.currentTarget.checked))}
             />
-            <span>{view.enabled ? "On" : "Off"}</span>
+            <span>{view.enabled ? text.s.sync.on : text.s.sync.off}</span>
           </label>
         </div>
 
@@ -117,54 +106,54 @@
               <div class:indeterminate={pct === null} style:width={pct !== null ? `${pct}%` : undefined}></div>
             </div>
             <p class="status">
-              {view.progress.files} files{view.progress.totalBytes > 0 ? ` · ${formatBytes(view.progress.bytes)} of ${formatBytes(view.progress.totalBytes)}` : ""}{view.progress.speed > 0 ? ` · ${formatSpeed(view.progress.speed)}` : ""}{view.progress.etaSeconds !== null ? ` · ${formatDuration(view.progress.etaSeconds)} left` : ""}
-              {#if view.progress.errors > 0}<span class="problem"> · {view.progress.errors} errors so far</span>{/if}
+              {text.s.sync.files(view.progress.files)}{view.progress.totalBytes > 0 ? ` · ${text.s.sync.of(formatBytes(view.progress.bytes), formatBytes(view.progress.totalBytes))}` : ""}{view.progress.speed > 0 ? ` · ${formatSpeed(view.progress.speed)}` : ""}{view.progress.etaSeconds !== null ? ` · ${text.s.sync.left(formatDuration(view.progress.etaSeconds))}` : ""}
+              {#if view.progress.errors > 0}<span class="problem"> · {text.s.sync.errorsSoFar(view.progress.errors)}</span>{/if}
             </p>
             {#if view.progress.currentFile}<p class="file" title={view.progress.currentFile}>{view.progress.currentFile}</p>{/if}
           </div>
         {:else if last}
           <p class="status" class:problem={last.outcome.state === "failed"}>
-            Last run {timeAgo(last.finishedAt ?? last.startedAt)}: {outcomeTitle(last.outcome)}{last.files > 0 ? ` · ${last.files} files` : ""}{view.nextRunAt !== null ? ` · Next run ${nextRunLabel(view.nextRunAt, now)}` : ""}
+            {text.s.sync.lastRun(timeAgo(last.finishedAt ?? last.startedAt), outcomeTitle(last.outcome))}{last.files > 0 ? ` · ${text.s.sync.files(last.files)}` : ""}{view.nextRunAt !== null ? ` · ${text.s.sync.nextRun(nextRunLabel(view.nextRunAt, now))}` : ""}
           </p>
         {:else}
-          <p class="status">Never run{view.nextRunAt !== null ? ` · Next run ${nextRunLabel(view.nextRunAt, now)}` : ""}</p>
+          <p class="status">{text.s.sync.neverRun}{view.nextRunAt !== null ? ` · ${text.s.sync.nextRun(nextRunLabel(view.nextRunAt, now))}` : ""}</p>
         {/if}
 
         <div class="actions">
           {#if view.progress}
-            <button class="button with-icon" onclick={() => jobs.act(() => api.cancelJob(view.id))}><Square {...ICON} />Stop</button>
+            <button class="button with-icon" onclick={() => jobs.act(() => api.cancelJob(view.id))}><Square {...ICON} />{text.s.sync.stop}</button>
           {:else}
             <button class="button primary with-icon" onclick={() => jobs.act(() => api.runJob(view.id))} disabled={rcd.state.state !== "healthy"}>
-              <Play {...ICON} />Run now
+              <Play {...ICON} />{text.s.sync.runNow}
             </button>
           {/if}
-          <button class="button with-icon" onclick={() => (editing = view)} disabled={view.progress !== null}><Pencil {...ICON} />Edit</button>
+          <button class="button with-icon" onclick={() => (editing = view)} disabled={view.progress !== null}><Pencil {...ICON} />{text.s.sync.edit}</button>
           <button class="button" onclick={() => (expanded[view.id] = !expanded[view.id])} aria-expanded={!!expanded[view.id]}>
-            {expanded[view.id] ? "Hide history" : `History (${view.runs.length})`}
+            {expanded[view.id] ? text.s.sync.hideHistory : text.s.sync.history(view.runs.length)}
           </button>
           <span class="spacer"></span>
           {#if confirmingDelete?.id === view.id}
-            <button class="button" onclick={() => (confirmingDelete = null)}>Keep</button>
-            <button class="button destructive-fill" onclick={() => remove(view)}>Delete job</button>
+            <button class="button" onclick={() => (confirmingDelete = null)}>{text.s.common.keep}</button>
+            <button class="button destructive-fill" onclick={() => remove(view)}>{text.s.sync.deleteButton}</button>
           {:else}
-            <button class="button destructive with-icon" onclick={() => (confirmingDelete = view)} disabled={view.progress !== null}><Trash {...ICON} />Delete…</button>
+            <button class="button destructive with-icon" onclick={() => (confirmingDelete = view)} disabled={view.progress !== null}><Trash {...ICON} />{text.s.sync.deleteEllipsis}</button>
           {/if}
         </div>
 
         {#if expanded[view.id]}
           {#if view.runs.length === 0}
-            <p class="status">No runs yet.</p>
+            <p class="status">{text.s.sync.noRuns}</p>
           {:else}
             <table class="runs">
               <tbody>
                 {#each view.runs as run (run.id)}
                   <tr>
                     <td>{new Date(run.startedAt * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</td>
-                    <td class="outcome" data-state={run.outcome.state} title={outcomeTitle(run.outcome)}>{outcomeLabel(run.outcome)}</td>
-                    <td class="muted">{run.scheduled ? "Scheduled" : "By hand"}</td>
-                    <td>{run.files} files</td>
-                    <td>{run.errors > 0 ? `${run.errors} errors` : ""}</td>
-                    <td class="end"><button class="link" onclick={() => openLog(view, run.id, run.startedAt)}>View log</button></td>
+                    <td class="outcome" data-state={run.outcome.state} title={run.outcome.state === "failed" ? (run.outcome.details ?? run.outcome.message) : outcomeTitle(run.outcome)}>{outcomeLabel(run.outcome)}</td>
+                    <td class="muted">{run.scheduled ? text.s.sync.scheduled : text.s.sync.byHand}</td>
+                    <td>{text.s.sync.files(run.files)}</td>
+                    <td>{run.errors > 0 ? text.s.sync.errors(run.errors) : ""}</td>
+                    <td class="end"><button class="link" onclick={() => openLog(view, run.id, run.startedAt)}>{text.s.sync.viewLog}</button></td>
                   </tr>
                 {/each}
               </tbody>
@@ -351,20 +340,7 @@
     color: var(--text-secondary);
     margin: 0 0 14px;
   }
-  .notice,
-  .error {
+  .notice {
     color: var(--status-disconnected);
-  }
-  :global(.button.destructive) {
-    color: var(--status-disconnected);
-  }
-  :global(.button.destructive-fill) {
-    background: var(--status-disconnected);
-    color: #fff;
-    border: none;
-    border-radius: var(--radius-control);
-    padding: 6px 14px;
-    cursor: pointer;
-    font-weight: 500;
   }
 </style>

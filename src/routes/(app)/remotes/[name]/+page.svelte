@@ -2,13 +2,15 @@
   import { page } from "$app/state";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
+  import ErrorNote from "$lib/components/ErrorNote.svelte";
   import RemoteWizard from "$lib/components/RemoteWizard.svelte";
-  import { api, errorMessage } from "$lib/api";
-  import type { ProviderDef, RemoteForm } from "$lib/api/types";
+  import { api, asAppError } from "$lib/api";
+  import type { AppError, ProviderDef, RemoteForm } from "$lib/api/types";
+  import { text } from "$lib/text/index.svelte";
 
   let form = $state<RemoteForm | null>(null);
   let provider = $state<ProviderDef | null>(null);
-  let error = $state<string | null>(null);
+  let error = $state<AppError | null>(null);
   let confirmingDelete = $state(false);
   let deleting = $state(false);
 
@@ -20,7 +22,7 @@
       form = loaded;
       provider = providers.find((p) => p.id === loaded.providerId) ?? null;
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     }
   });
 
@@ -31,7 +33,7 @@
       await api.deleteRemote(name);
       await goto("/remotes");
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
       deleting = false;
     }
   }
@@ -39,7 +41,7 @@
 
 <h1>{name}</h1>
 
-{#if error}<p class="error" role="alert">{error}</p>{/if}
+<ErrorNote {error} />
 
 {#if form && provider}
   <RemoteWizard {provider} existing={form} />
@@ -47,27 +49,24 @@
   <section class="danger">
     {#if confirmingDelete}
       <p>
-        Remove <strong>{name}</strong> from Orbit? Its settings and sign-in are deleted from rclone.
-        Files on the service are not touched.
+        <strong>{text.s.storage.removeTitle(name)}</strong>
+        {text.s.storage.removeBody}
       </p>
       <div class="actions">
-        <button class="button" onclick={() => (confirmingDelete = false)} disabled={deleting}>Cancel</button>
+        <button class="button" onclick={() => (confirmingDelete = false)} disabled={deleting}>{text.s.common.cancel}</button>
         <button class="button destructive" onclick={remove} disabled={deleting}>
-          {deleting ? "Removing…" : "Remove connection"}
+          {deleting ? text.s.storage.removing : text.s.storage.remove}
         </button>
       </div>
     {:else}
-      <button class="button destructive" onclick={() => (confirmingDelete = true)}>Remove connection…</button>
+      <button class="button destructive" onclick={() => (confirmingDelete = true)}>{text.s.storage.removeEllipsis}</button>
     {/if}
   </section>
 {:else if !error}
-  <p class="help">Loading…</p>
+  <p class="help">{text.s.common.loading}</p>
 {/if}
 
 <style>
-  .error {
-    color: var(--status-disconnected);
-  }
   .help {
     color: var(--text-secondary);
   }
@@ -85,8 +84,5 @@
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-  }
-  :global(.button.destructive) {
-    color: var(--status-disconnected);
   }
 </style>

@@ -1,35 +1,34 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { onMount } from "svelte";
+  import ErrorNote from "$lib/components/ErrorNote.svelte";
   import RemoteWizard from "$lib/components/RemoteWizard.svelte";
-  import { api, errorMessage } from "$lib/api";
-  import type { ProviderDef } from "$lib/api/types";
+  import { api, asAppError } from "$lib/api";
+  import type { AppError, ProviderDef } from "$lib/api/types";
+  import { text } from "$lib/text/index.svelte";
 
   let provider = $state<ProviderDef | null>(null);
-  let error = $state<string | null>(null);
+  let error = $state<AppError | null>(null);
 
   onMount(async () => {
     try {
       provider = (await api.listProviders()).find((p) => p.id === page.params.provider) ?? null;
     } catch (err) {
-      error = errorMessage(err);
+      error = asAppError(err);
     }
   });
 </script>
 
 {#if provider}
-  <h1>Connect {provider.title}</h1>
+  <h1>{provider.title}</h1>
   <RemoteWizard {provider} />
 {:else if error}
-  <p class="error" role="alert">{error}</p>
+  <ErrorNote {error} />
 {:else}
-  <p class="help">Loading…</p>
+  <p class="help">{text.s.common.loading}</p>
 {/if}
 
 <style>
-  .error {
-    color: var(--status-disconnected);
-  }
   .help {
     color: var(--text-secondary);
   }

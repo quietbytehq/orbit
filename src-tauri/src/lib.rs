@@ -9,6 +9,7 @@ pub mod remotes;
 mod reveal;
 pub mod settings;
 pub mod status;
+pub mod text;
 mod tray;
 
 use files::transfers::{Item as TransferItem, TransferQueue};
@@ -154,6 +155,7 @@ pub fn run() {
             commands::restart_rcd,
             commands::splash_finished,
             commands::get_splash_plan,
+            commands::app_info,
             remotes::commands::list_providers,
             remotes::commands::list_remotes,
             remotes::commands::get_remote_form,
