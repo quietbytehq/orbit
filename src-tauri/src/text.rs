@@ -27,6 +27,7 @@ pub const ENGINE_COULD_NOT_START: &str = "Orbit could not start its storage engi
 
 // Settings.
 pub const CONCURRENCY_RANGE: &str = "Files at the same time must be between 1 and 8.";
+pub const AUTOSTART_FAILED: &str = "Orbit could not change the start-at-sign-in setting on this computer. The details may say why.";
 
 // Cloud storage (remotes) and the wizards.
 pub const UNKNOWN_SERVICE: &str = "Orbit does not know that kind of storage.";

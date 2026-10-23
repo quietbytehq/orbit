@@ -4,7 +4,7 @@
   import Dialog from "$lib/components/Dialog.svelte";
   import ErrorNote from "$lib/components/ErrorNote.svelte";
   import { api, asAppError } from "$lib/api";
-  import type { AppError, MountInfo, MountSupport, RemoteSummary } from "$lib/api/types";
+  import type { AppError, MountInfo, MountSupport, RemoteSummary, SavedMount } from "$lib/api/types";
   import { rcd } from "$lib/stores/rcd.svelte";
   import { text } from "$lib/text/index.svelte";
   import { Eject, HardDrive, ICON, ICON_LG, RefreshCw, providerIcon } from "$lib/icons";
@@ -13,7 +13,9 @@
 
   let support = $state<MountSupport | null>(null);
   let mounts = $state<MountInfo[]>([]);
+  let saved = $state<SavedMount[]>([]);
   let remotes = $state<RemoteSummary[]>([]);
+  let autoConnect = $state(false);
   let error = $state<AppError | null>(null);
   let busy = $state(false);
   let mounting = $state<RemoteSummary | null>(null);
@@ -22,7 +24,7 @@
   async function load() {
     error = null;
     try {
-      [support, remotes] = await Promise.all([api.mountSupport(), api.listRemotes()]);
+      [support, remotes, saved] = await Promise.all([api.mountSupport(), api.listRemotes(), api.listSavedMounts()]);
       mounts = rcd.state.state === "healthy" ? await api.listMounts() : [];
     } catch (err) {
       error = asAppError(err);
@@ -40,7 +42,30 @@
   async function startMount(remote: RemoteSummary) {
     mounting = remote;
     error = null;
-    location = await api.suggestMountLocation(remote.name).catch(() => "");
+    const remembered = saved.find((entry) => entry.remote === remote.name);
+    autoConnect = remembered?.autoConnect ?? false;
+    location = remembered?.mountPoint || (await api.suggestMountLocation(remote.name).catch(() => ""));
+  }
+
+  async function setAuto(remote: string, value: boolean) {
+    error = null;
+    try {
+      await api.setMountAutoConnect(remote, value);
+      saved = await api.listSavedMounts();
+      mounts = mounts.map((mount) => (mount.remote === remote ? { ...mount, autoConnect: value } : mount));
+    } catch (err) {
+      error = asAppError(err);
+    }
+  }
+
+  async function forget(remote: string) {
+    error = null;
+    try {
+      await api.forgetSavedMount(remote);
+      saved = await api.listSavedMounts();
+    } catch (err) {
+      error = asAppError(err);
+    }
   }
 
   async function confirmMount() {
@@ -48,7 +73,7 @@
     busy = true;
     error = null;
     try {
-      await api.mountRemote(mounting.name, location.trim());
+      await api.mountRemote(mounting.name, location.trim(), autoConnect);
       mounting = null;
       await load();
     } catch (err) {
@@ -69,6 +94,7 @@
   }
 
   const mountedNames = $derived(new Set(mounts.map((mount) => mount.remote)));
+  const savedByRemote = $derived(new Map(saved.map((entry) => [entry.remote, entry])));
 </script>
 
 <h1>{text.s.drives.title}</h1>
@@ -104,6 +130,10 @@
           <div>
             <span class="name">{mount.remote}</span>
             <span class="place">{mount.mountPoint}</span>
+            <label class="auto">
+              <input type="checkbox" checked={mount.autoConnect} onchange={(event) => setAuto(mount.remote, event.currentTarget.checked)} />
+              <span>{text.s.drives.autoConnect}</span>
+            </label>
           </div>
           <button class="button with-icon" onclick={() => unmount(mount)}><Eject {...ICON} />{text.s.drives.remove}</button>
         </li>
@@ -120,11 +150,18 @@
     <ul class="list">
       {#each remotes as remote (remote.name)}
         {@const Icon = providerIcon(remote.providerId)}
+        {@const remembered = savedByRemote.get(remote.name)}
         <li class="card row">
           <span class="glyph"><Icon {...ICON_LG} /></span>
           <div>
             <span class="name">{remote.name}</span>
             <span class="place">{remote.providerTitle}</span>
+            {#if remembered && !mountedNames.has(remote.name)}
+              <span class="place">
+                {text.s.drives.rememberedAt(remembered.mountPoint)}{remembered.autoConnect ? ` · ${text.s.drives.autoConnectShort}` : ""}
+                · <button class="link" onclick={() => forget(remote.name)}>{text.s.drives.forget}</button>
+              </span>
+            {/if}
           </div>
           {#if mountedNames.has(remote.name)}
             <span class="place">{text.s.drives.connected}</span>
@@ -150,6 +187,10 @@
       <label class="label" for="mount-location">{text.s.drives.locationLabel}</label>
       <input id="mount-location" class="input" bind:value={location} disabled={busy} />
       <p class="help">{text.s.drives.locationHelp}</p>
+      <label class="auto dialog-auto">
+        <input type="checkbox" bind:checked={autoConnect} disabled={busy} />
+        <span>{text.s.drives.autoConnect}</span>
+      </label>
       <div class="dialog-actions">
         <button type="button" class="button" onclick={() => (mounting = null)} disabled={busy}>{text.s.common.cancel}</button>
         <button type="submit" class="button primary" disabled={busy || !location.trim()}>
@@ -243,6 +284,26 @@
     font-weight: 500;
     display: block;
     margin-bottom: 4px;
+  }
+  .auto {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-top: 4px;
+  }
+  .dialog-auto {
+    margin: 0 0 12px;
+  }
+  .link {
+    appearance: none;
+    border: none;
+    background: none;
+    color: var(--accent);
+    padding: 0;
+    cursor: pointer;
+    font-size: inherit;
   }
   .input {
     width: 100%;

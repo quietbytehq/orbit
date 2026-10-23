@@ -241,6 +241,15 @@ export interface MountInfo {
   remote: string;
   mountPoint: string;
   mountedOn: string | null;
+  /** Remembered and connected again at startup. */
+  autoConnect: boolean;
+}
+
+/** Mirrors `mounts::SavedMount`: a drive or folder the person set up, connected or not. */
+export interface SavedMount {
+  remote: string;
+  mountPoint: string;
+  autoConnect: boolean;
 }
 
 /** Mirrors `mounts::WinFspStatus`. */
@@ -275,4 +284,6 @@ export interface Settings {
   splash: SplashMode;
   /** App version that last played the full intro. Managed by the backend. */
   lastSplashVersion: string | null;
+  /** Start Orbit at sign-in, minimized to the tray. */
+  startOnLogin: boolean;
 }

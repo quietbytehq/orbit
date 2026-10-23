@@ -183,9 +183,9 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>, rcd: &RcdState, overall: OverallS
     if tray.current == Some((state, overall)) {
         return;
     }
-    let _ = tray
-        .icon
-        .set_icon(Some(tray_image(tray.variant, state).expect("bundled tray icon is valid")));
+    let _ = tray.icon.set_icon(Some(
+        tray_image(tray.variant, state).expect("bundled tray icon is valid"),
+    ));
     let description = match rcd {
         RcdState::Starting | RcdState::Stopped => "Starting…".to_owned(),
         _ => status::describe(overall).to_owned(),
@@ -208,9 +208,9 @@ pub fn set_theme<R: Runtime>(app: &AppHandle<R>, theme: Theme) {
     }
     tray.variant = variant;
     if let Some((state, _)) = tray.current {
-        let _ = tray
-            .icon
-            .set_icon(Some(tray_image(variant, state).expect("bundled tray icon is valid")));
+        let _ = tray.icon.set_icon(Some(
+            tray_image(variant, state).expect("bundled tray icon is valid"),
+        ));
     }
 }
 

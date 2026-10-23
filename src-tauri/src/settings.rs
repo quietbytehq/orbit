@@ -20,6 +20,8 @@ pub struct Settings {
     pub splash: SplashMode,
     /// App version that last played the full intro. `None` until the first launch.
     pub last_splash_version: Option<String>,
+    /// Register Orbit to start when the user signs in. It then starts minimized to the tray.
+    pub start_on_login: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +93,7 @@ impl Default for Settings {
             rclone_log_level: LogLevel::Info,
             splash: SplashMode::Short,
             last_splash_version: None,
+            start_on_login: false,
         }
     }
 }
@@ -104,6 +107,22 @@ impl Settings {
             return Err(AppError::invalid(text::CONCURRENCY_RANGE));
         }
         Ok(())
+    }
+}
+
+/// Registers or removes Orbit's start-at-sign-in entry to match `enabled`. No-op when it already
+/// matches, so a missing entry is recreated on launch and nothing is touched otherwise.
+pub fn apply_start_on_login(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let launcher = app.autolaunch();
+    let current = launcher.is_enabled().map_err(|err| err.to_string())?;
+    if current == enabled {
+        return Ok(());
+    }
+    if enabled {
+        launcher.enable().map_err(|err| err.to_string())
+    } else {
+        launcher.disable().map_err(|err| err.to_string())
     }
 }
 
@@ -179,6 +198,7 @@ mod tests {
             rclone_log_level: LogLevel::Debug,
             splash: SplashMode::Off,
             last_splash_version: Some("0.2.0".into()),
+            start_on_login: true,
         };
         save(&path, &settings).unwrap();
         assert_eq!(load(&path).unwrap(), settings);

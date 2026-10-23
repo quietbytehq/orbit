@@ -16,6 +16,7 @@ import type {
   RcdState,
   RemoteForm,
   RemoteSummary,
+  SavedMount,
   Settings,
   SplashPlan,
   TransferItem,
@@ -74,7 +75,12 @@ export const api = {
   mountSupport: () => invoke<MountSupport>("mount_support"),
   suggestMountLocation: (remote: string) => invoke<string>("suggest_mount_location", { remote }),
   listMounts: () => invoke<MountInfo[]>("list_mounts"),
-  mountRemote: (remote: string, mountPoint: string) => invoke<void>("mount_remote", { remote, mountPoint }),
+  listSavedMounts: () => invoke<SavedMount[]>("list_saved_mounts"),
+  setMountAutoConnect: (remote: string, autoConnect: boolean) =>
+    invoke<void>("set_mount_auto_connect", { remote, autoConnect }),
+  forgetSavedMount: (remote: string) => invoke<void>("forget_saved_mount", { remote }),
+  mountRemote: (remote: string, mountPoint: string, autoConnect: boolean) =>
+    invoke<void>("mount_remote", { remote, mountPoint, autoConnect }),
   unmountRemote: (mountPoint: string) => invoke<void>("unmount_remote", { mountPoint }),
 };
 

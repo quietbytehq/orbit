@@ -84,6 +84,13 @@
 
   <section class="card">
     <h2>{text.s.settings.startup}</h2>
+    <label class="row">
+      <span>
+        <span class="title">{text.s.settings.startOnLogin}</span>
+        <span class="help">{text.s.settings.startOnLoginHelp}</span>
+      </span>
+      <input type="checkbox" checked={current.startOnLogin} onchange={(event) => update({ startOnLogin: event.currentTarget.checked })} />
+    </label>
     <fieldset>
       <legend class="title">{text.s.settings.intro}</legend>
       <p class="help">{text.s.settings.introHelp}</p>

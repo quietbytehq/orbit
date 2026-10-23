@@ -26,6 +26,11 @@ impl AppPaths {
         self.data_dir.join("jobs.json")
     }
 
+    /// Remembered drives and folders (which storage, where, and whether to connect at startup).
+    pub fn mounts(&self) -> PathBuf {
+        self.data_dir.join("mounts.json")
+    }
+
     pub fn logs_dir(&self) -> PathBuf {
         self.data_dir.join("logs")
     }

@@ -111,12 +111,12 @@ Outputs go to `src-tauri/target/release/bundle/`.
 Everything is under the Tauri app data folder: `~/.local/share/com.orbit.rclone` on Linux and `%APPDATA%\com.orbit.rclone` on Windows.
 
 - `rclone.conf` is rclone's own config. **It is the only place credentials are stored.** Orbit does not keep its own copy.
-- `settings.json` and `jobs.json` hold preferences and job definitions, with no secrets.
+- `settings.json`, `jobs.json` and `mounts.json` hold preferences, backup definitions and remembered drives, with no secrets.
 - `logs/` holds the rclone log and one log per job run.
 
 ## Known limitations
 
-- Mounts end when Orbit quits. They are not restored on the next launch.
+- Drives and folders end when Orbit quits. Ones marked "connect automatically" come back once Orbit is running and its engine is up.
 - Scheduled jobs run only while Orbit is open. A run that was due while Orbit was closed is not made up, and nothing runs on login.
 - Deletes are permanent. Orbit does not use a provider's trash.
 - A job's error list shows each new error as it appears, not every error from the run.

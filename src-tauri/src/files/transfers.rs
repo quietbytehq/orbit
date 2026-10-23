@@ -1,10 +1,10 @@
 //! Transfer queue. Each transfer runs as an async rclone job, and progress is read from the
 //! job's stats group. Up to `limit` transfers run at once; the rest wait in order.
 
-use crate::text;
 use super::{Endpoint, join, local_fs, remote_fs};
 use crate::error::{AppError, AppResult, ErrorKind};
 use crate::rclone::Supervisor;
+use crate::text;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::Path;
@@ -88,15 +88,15 @@ pub fn direction(request: &TransferRequest) -> AppResult<Direction> {
         (Endpoint::Remote { .. }, Endpoint::Local { .. }, Mode::Copy) => Ok(Direction::Download),
         (Endpoint::Remote { .. }, Endpoint::Remote { .. }, Mode::Copy) => Ok(Direction::Copy),
         (Endpoint::Remote { .. }, Endpoint::Remote { .. }, Mode::Move) => Ok(Direction::Move),
-        (Endpoint::Local { .. }, _, Mode::Move) => Err(AppError::invalid(
-            text::LOCAL_TO_REMOTE_IS_UPLOAD,
-        )),
-        (Endpoint::Remote { .. }, Endpoint::Local { .. }, Mode::Move) => Err(AppError::invalid(
-            text::REMOTE_TO_LOCAL_IS_DOWNLOAD,
-        )),
-        (Endpoint::Local { .. }, Endpoint::Local { .. }, _) => Err(AppError::invalid(
-            text::LOCAL_TO_LOCAL_UNSUPPORTED,
-        )),
+        (Endpoint::Local { .. }, _, Mode::Move) => {
+            Err(AppError::invalid(text::LOCAL_TO_REMOTE_IS_UPLOAD))
+        }
+        (Endpoint::Remote { .. }, Endpoint::Local { .. }, Mode::Move) => {
+            Err(AppError::invalid(text::REMOTE_TO_LOCAL_IS_DOWNLOAD))
+        }
+        (Endpoint::Local { .. }, Endpoint::Local { .. }, _) => {
+            Err(AppError::invalid(text::LOCAL_TO_LOCAL_UNSUPPORTED))
+        }
     }
 }
 
@@ -119,9 +119,7 @@ pub fn build_call(request: &TransferRequest) -> AppResult<RcCall> {
     direction(request)?;
     let is_move = request.mode == Mode::Move;
     if request.name.trim().is_empty() || request.name.contains('/') || request.name.contains('\\') {
-        return Err(AppError::invalid(
-            text::TRANSFER_ONE_ITEM,
-        ));
+        return Err(AppError::invalid(text::TRANSFER_ONE_ITEM));
     }
     if request.is_dir {
         let endpoint = if is_move { "sync/move" } else { "sync/copy" };
@@ -184,7 +182,6 @@ struct JobStatus {
     success: bool,
     error: String,
 }
-
 
 #[derive(Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -304,10 +301,7 @@ impl TransferQueue {
         let job_id = {
             let mut inner = self.inner.lock().expect("queue lock");
             let Some(entry) = inner.entries.iter_mut().find(|e| e.item.id == id) else {
-                return Err(AppError::new(
-                    ErrorKind::InvalidInput,
-                    text::TRANSFER_GONE,
-                ));
+                return Err(AppError::new(ErrorKind::InvalidInput, text::TRANSFER_GONE));
             };
             match entry.item.state {
                 State::Queued => {

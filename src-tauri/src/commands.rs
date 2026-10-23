@@ -62,6 +62,7 @@ pub fn get_settings(store: State<'_, SettingsStore>) -> Settings {
 #[tauri::command]
 pub fn save_settings(
     settings: Settings,
+    app: AppHandle,
     paths: State<'_, AppPaths>,
     store: State<'_, SettingsStore>,
     supervisor: State<'_, Supervisor>,
@@ -69,6 +70,12 @@ pub fn save_settings(
 ) -> AppResult<Settings> {
     settings.validate()?;
     let previous = store.get();
+    if previous.start_on_login != settings.start_on_login {
+        settings::apply_start_on_login(&app, settings.start_on_login).map_err(|err| {
+            crate::error::AppError::new(crate::error::ErrorKind::Io, crate::text::AUTOSTART_FAILED)
+                .with_details(err)
+        })?;
+    }
     settings::save(&paths.settings(), &settings)?;
     store.set(settings.clone());
 

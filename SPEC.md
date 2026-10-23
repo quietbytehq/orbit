@@ -70,6 +70,7 @@ The app data directory is what Tauri's `app_data_dir()` returns for identifier `
 | rclone.conf | `<app data>/rclone.conf`                       | `<app data>\rclone.conf`             |
 | settings    | `<app data>/settings.json`                     | `<app data>\settings.json`           |
 | jobs        | `<app data>/jobs.json`                         | `<app data>\jobs.json`               |
+| mounts      | `<app data>/mounts.json`                       | `<app data>\mounts.json`             |
 | logs        | `<app data>/logs/`                             | `<app data>\logs\`                   |
 
 ## 3. Design
@@ -221,6 +222,12 @@ Mounts:
 - Mount a remote with `mount/mount`. Linux mounts to a directory (default `~/Orbit/<remote>`).
   Windows mounts to a free drive letter (default: first free letter from `Z:` downward).
 - Unmount with `mount/unmount`. Mounted state is read from `mount/listmounts` every 5 s.
+- Remembered mounts: every mount the person sets up is recorded in `mounts.json` (remote, mount
+  point, `autoConnect`). The Drives/Folders page shows a per-mount toggle "Connect this drive
+  automatically when Orbit starts"; mounts marked automatic are connected once, the first time the
+  engine reports healthy after launch, when mounting is available. Disconnecting keeps the entry
+  (it is offered again with its last location); "Forget" removes it. Failures to reconnect are
+  logged, and the page shows what is actually connected.
 - Linux requires FUSE (`fusermount3`). If it is missing, Orbit explains how to install it.
 - Windows requires WinFsp. See section 6.
 
@@ -255,7 +262,12 @@ Per-remote badge:
 - Appearance: system, light, dark.
 - Transfers: concurrent transfers (1–8, default 3).
 - rclone: path override (advanced), log level (`ERROR`, `NOTICE`, `INFO`, `DEBUG`).
-- Splash: full, short, or off (default short; see §3.4).
+- Splash: full, short, or off (default short; see §3.5).
+- Startup: "Start Orbit when I sign in" (default off) registers Orbit with the platform's autostart
+  (`tauri-plugin-autostart`: a registry Run entry on Windows, an XDG autostart entry on Linux). The
+  entry passes `--minimized`, and a launch with that argument shows no splash and no main window:
+  Orbit sits in the tray until "Show Orbit". The setting is re-applied at every launch so a missing
+  entry is recreated. The entry itself lives outside Orbit's files and holds no secrets.
 - Settings are stored in `settings.json`. Changes apply immediately, except rclone path and log
   level, which restart rcd.
 

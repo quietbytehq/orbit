@@ -22,19 +22,53 @@ use reveal::{RevealGate, RevealState};
 use settings::SettingsStore;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WindowEvent};
 use tray::TrayHandle;
+
+/// Argument the autostart entry passes so Orbit starts in the tray without a window.
+pub const MINIMIZED_ARG: &str = "--minimized";
+
+/// True when this launch came from the sign-in autostart entry: no splash, no main window.
+pub struct StartHidden(pub bool);
+
+/// Set once the automatic drives and folders have been reconnected after the engine came up.
+struct MountsRestored(AtomicBool);
 
 pub const RCD_STATE_EVENT: &str = "rcd://state";
 pub const TRANSFERS_EVENT: &str = "transfers://update";
 pub const JOBS_EVENT: &str = "jobs://update";
 
-/// Closes the splash and shows the main window.
+/// Closes the splash and shows the main window, unless this launch should stay in the tray.
 pub fn reveal_main_window(app: &AppHandle) {
     if let Some(splash) = app.get_webview_window("splash") {
         let _ = splash.close();
     }
-    tray::show_main_window(app);
+    let hidden = app
+        .try_state::<StartHidden>()
+        .is_some_and(|hidden| hidden.0);
+    if !hidden {
+        tray::show_main_window(app);
+    }
+}
+
+/// Reconnects remembered drives and folders the first time the engine is healthy.
+fn restore_mounts_once(app: &AppHandle) {
+    let Some(flag) = app.try_state::<MountsRestored>() else {
+        return;
+    };
+    if flag.0.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let supervisor = handle.state::<Supervisor>().inner().clone();
+        let Ok(client) = supervisor.client() else {
+            return;
+        };
+        let store = handle.state::<mounts::MountStore>();
+        mounts::restore(&client, &store).await;
+    });
 }
 
 /// Recomputes the tray state from rclone health and current activity.
@@ -57,6 +91,9 @@ pub fn refresh_status(app: &AppHandle) {
 fn on_rcd_change(app: &AppHandle, state: &RcdState) {
     let _ = app.emit(RCD_STATE_EVENT, state);
     refresh_status(app);
+    if matches!(state, RcdState::Healthy { .. }) {
+        restore_mounts_once(app);
+    }
 
     if matches!(state, RcdState::Healthy { .. } | RcdState::Failed { .. }) {
         let reveal = app.state::<RevealState>();
@@ -71,10 +108,18 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_autostart::Builder::new()
+                .arg(MINIMIZED_ARG)
+                .build(),
+        )
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             let paths = AppPaths::new(&data_dir);
             std::fs::create_dir_all(paths.logs_dir())?;
+            let start_hidden = std::env::args().skip(1).any(|arg| arg == MINIMIZED_ARG);
+            app.manage(StartHidden(start_hidden));
+            app.manage(MountsRestored(AtomicBool::new(false)));
 
             let mut settings = settings::load(&paths.settings()).unwrap_or_else(|err| {
                 eprintln!("Orbit: could not read settings, using defaults: {err}");
@@ -82,7 +127,16 @@ pub fn run() {
             });
             let spec = rclone::spec_for(&paths, &settings);
             let app_version = app.package_info().version.to_string();
-            let splash_plan = settings.splash_plan(&app_version);
+            let splash_plan = if start_hidden {
+                settings::SplashPlan::Off
+            } else {
+                settings.splash_plan(&app_version)
+            };
+            // Keep the sign-in entry in step with the setting (it lives outside Orbit's files).
+            if let Err(err) = settings::apply_start_on_login(app.handle(), settings.start_on_login)
+            {
+                eprintln!("Orbit: could not update the start-at-sign-in entry: {err}");
+            }
             if splash_plan == settings::SplashPlan::Full {
                 // Remember that this version has shown its full intro, so the next launch is short.
                 settings.last_splash_version = Some(app_version);
@@ -124,7 +178,7 @@ pub fn run() {
                 refresh_status(&jobs_handle);
             })?;
             app.manage(runner);
-            app.manage(mounts::MountRegistry::default());
+            app.manage(mounts::MountStore::load(paths.mounts()));
             app.manage(supervisor);
             app.manage(paths);
 
@@ -188,6 +242,9 @@ pub fn run() {
             mounts::mount_support,
             mounts::suggest_mount_location,
             mounts::list_mounts,
+            mounts::list_saved_mounts,
+            mounts::set_mount_auto_connect,
+            mounts::forget_saved_mount,
             mounts::mount_remote,
             mounts::unmount_remote,
         ])
