@@ -5,6 +5,7 @@
   import { transfers } from "$lib/stores/transfers.svelte";
   import { settings } from "$lib/stores/settings.svelte";
   import TransferPanel from "$lib/components/TransferPanel.svelte";
+  import { ICON, NAV_ICONS } from "$lib/icons";
 
   let { children } = $props();
 
@@ -36,8 +37,10 @@
     </div>
     <nav>
       {#each sections as section (section.href)}
+        {@const Icon = NAV_ICONS[section.href]}
         <a href={section.href} class="item" aria-current={isCurrent(section.href) ? "page" : undefined}>
-          {section.label}
+          <Icon {...ICON} />
+          <span>{section.label}</span>
         </a>
       {/each}
     </nav>
@@ -81,7 +84,9 @@
     gap: 2px;
   }
   .item {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 9px;
     padding: 6px 10px;
     border-radius: var(--radius-control);
     text-decoration: none;
@@ -93,6 +98,13 @@
   .item[aria-current="page"] {
     background: var(--sidebar-selected);
     font-weight: 500;
+  }
+  .item :global(svg) {
+    color: var(--text-secondary);
+    flex: none;
+  }
+  .item[aria-current="page"] :global(svg) {
+    color: var(--accent);
   }
   .column {
     display: flex;

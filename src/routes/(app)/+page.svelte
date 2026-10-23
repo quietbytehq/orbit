@@ -2,6 +2,7 @@
   import StatusBadge from "$lib/components/StatusBadge.svelte";
   import { rcd } from "$lib/stores/rcd.svelte";
   import { overallStatus } from "$lib/util/status";
+  import { ICON, RefreshCw } from "$lib/icons";
 
   let status = $derived(overallStatus(rcd.state));
   let restarting = $state(false);
@@ -35,8 +36,8 @@
     </div>
     <div class="side">
       <StatusBadge {status} />
-      <button class="button" onclick={restart} disabled={restarting || rcd.state.state === "starting"}>
-        Restart rclone
+      <button class="button with-icon" onclick={restart} disabled={restarting || rcd.state.state === "starting"}>
+        <RefreshCw {...ICON} />Restart rclone
       </button>
     </div>
   </div>

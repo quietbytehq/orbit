@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { api, errorMessage } from "$lib/api";
   import type { ProviderDef } from "$lib/api/types";
+  import { ICON_LG, providerIcon } from "$lib/icons";
 
   let providers = $state<ProviderDef[]>([]);
   let error = $state<string | null>(null);
@@ -24,7 +25,9 @@
 
 <div class="grid">
   {#each providers as provider (provider.id)}
+    {@const Icon = providerIcon(provider.id)}
     <a class="card provider" href={`/remotes/new/${provider.id}`}>
+      <span class="glyph"><Icon {...ICON_LG} /></span>
       <span class="title">{provider.title}</span>
       <span class="tagline">{provider.tagline}</span>
       <span class="auth">{authLabel[provider.auth]}</span>
@@ -55,6 +58,17 @@
   }
   .provider:hover {
     transform: translateY(-1px);
+  }
+  .glyph {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--control-bg);
+    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
   }
   .title {
     font-weight: 600;

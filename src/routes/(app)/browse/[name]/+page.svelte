@@ -6,6 +6,9 @@
   import { open } from "@tauri-apps/plugin-dialog";
   import Dialog from "$lib/components/Dialog.svelte";
   import DestinationPicker from "$lib/components/DestinationPicker.svelte";
+  import ToolbarButton from "$lib/components/ToolbarButton.svelte";
+  import { ArrowUp, Copy, Download, FILE_ICONS, FolderInput, FolderPlus, ICON, Pencil, RefreshCw, Trash, Upload } from "$lib/icons";
+  import { fileKind } from "$lib/util/filekind";
   import { api, errorMessage } from "$lib/api";
   import type { Endpoint, FileEntry, TransferRequest } from "$lib/api/types";
   import { transfers } from "$lib/stores/transfers.svelte";
@@ -262,15 +265,15 @@
     </nav>
   </div>
   <div class="actions">
-    <button class="button icon" onclick={up} disabled={path === ""} aria-label="Up one folder" title="Up one folder">↑</button>
-    <button class="button" onclick={() => load()} disabled={loading}>Refresh</button>
-    <button class="button" onclick={startNewFolder}>New folder</button>
-    <button class="button" onclick={pickUpload}>Upload…</button>
-    <button class="button" onclick={download} disabled={selectedEntries.length === 0}>Download…</button>
-    <button class="button" onclick={() => (dialog = "copy")} disabled={selectedEntries.length === 0}>Copy to…</button>
-    <button class="button" onclick={() => (dialog = "move")} disabled={selectedEntries.length === 0}>Move to…</button>
-    <button class="button" onclick={startRename} disabled={selectedEntries.length !== 1}>Rename…</button>
-    <button class="button destructive" onclick={() => (dialog = "delete")} disabled={selectedEntries.length === 0}>Delete…</button>
+    <ToolbarButton icon={ArrowUp} label="Up" onclick={up} disabled={path === ""} />
+    <ToolbarButton icon={RefreshCw} label="Refresh" onclick={() => load()} disabled={loading} />
+    <ToolbarButton icon={FolderPlus} label="New folder" onclick={startNewFolder} />
+    <ToolbarButton icon={Upload} label="Upload…" onclick={pickUpload} />
+    <ToolbarButton icon={Download} label="Download…" onclick={download} disabled={selectedEntries.length === 0} />
+    <ToolbarButton icon={Copy} label="Copy to…" onclick={() => (dialog = "copy")} disabled={selectedEntries.length === 0} />
+    <ToolbarButton icon={FolderInput} label="Move to…" onclick={() => (dialog = "move")} disabled={selectedEntries.length === 0} />
+    <ToolbarButton icon={Pencil} label="Rename…" onclick={startRename} disabled={selectedEntries.length !== 1} />
+    <ToolbarButton icon={Trash} label="Delete…" onclick={() => (dialog = "delete")} disabled={selectedEntries.length === 0} destructive />
   </div>
 </header>
 
@@ -291,6 +294,7 @@
     </thead>
     <tbody>
       {#each entries as entry, index (entry.path)}
+        {@const Icon = FILE_ICONS[fileKind(entry.name, entry.isDir)]}
         <tr
           class:selected={selected.includes(entry.path)}
           tabindex="0"
@@ -299,7 +303,7 @@
           onkeydown={(event) => onRowKey(event, index)}
           aria-selected={selected.includes(entry.path)}
         >
-          <td class="name"><span class="icon" aria-hidden="true">{entry.isDir ? "📁" : "📄"}</span>{entry.name}</td>
+          <td class="name"><span class="icon" class:folder={entry.isDir}><Icon {...ICON} /></span>{entry.name}</td>
           <td class="modified">{formatDate(entry.modTime)}</td>
           <td class="size">{entry.isDir ? "—" : formatBytes(entry.size)}</td>
         </tr>
@@ -388,9 +392,6 @@
     gap: 6px;
     flex-wrap: wrap;
   }
-  .button.icon {
-    min-width: 32px;
-  }
   .error {
     color: var(--status-disconnected);
   }
@@ -458,6 +459,11 @@
   }
   .name .icon {
     margin-right: 8px;
+    vertical-align: -3px;
+    color: var(--text-secondary);
+  }
+  .name .icon.folder {
+    color: var(--accent);
   }
   .modified {
     color: var(--text-secondary);

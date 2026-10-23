@@ -5,6 +5,7 @@
   import { api, errorMessage } from "$lib/api";
   import type { MountInfo, MountSupport, RemoteSummary } from "$lib/api/types";
   import { rcd } from "$lib/stores/rcd.svelte";
+  import { Eject, HardDrive, ICON, ICON_LG, RefreshCw, providerIcon } from "$lib/icons";
 
   const WINFSP_PAGE = "https://winfsp.dev/rel/";
 
@@ -79,7 +80,7 @@
       {#if support.platform === "windows"}
         <button class="button" onclick={() => openUrl(WINFSP_PAGE)}>Get WinFsp</button>
       {/if}
-      <button class="button" onclick={load}>Check again</button>
+      <button class="button with-icon" onclick={load}><RefreshCw {...ICON} />Check again</button>
     </div>
   </section>
 {/if}
@@ -97,11 +98,12 @@
     <ul class="list">
       {#each mounts as mount (mount.mountPoint)}
         <li class="card row">
+          <span class="glyph"><HardDrive {...ICON_LG} /></span>
           <div>
             <span class="name">{mount.remote}</span>
             <span class="place">{mount.mountPoint}</span>
           </div>
-          <button class="button" onclick={() => unmount(mount)}>Unmount</button>
+          <button class="button with-icon" onclick={() => unmount(mount)}><Eject {...ICON} />Unmount</button>
         </li>
       {/each}
     </ul>
@@ -115,7 +117,9 @@
   {:else}
     <ul class="list">
       {#each remotes as remote (remote.name)}
+        {@const Icon = providerIcon(remote.providerId)}
         <li class="card row">
+          <span class="glyph"><Icon {...ICON_LG} /></span>
           <div>
             <span class="name">{remote.name}</span>
             <span class="place">{remote.providerTitle}</span>
@@ -123,8 +127,8 @@
           {#if mountedNames.has(remote.name)}
             <span class="place">Mounted</span>
           {:else}
-            <button class="button" onclick={() => startMount(remote)} disabled={!support?.available || rcd.state.state !== "healthy"}>
-              Mount…
+            <button class="button with-icon" onclick={() => startMount(remote)} disabled={!support?.available || rcd.state.state !== "healthy"}>
+              <HardDrive {...ICON} />Mount…
             </button>
           {/if}
         </li>
@@ -197,6 +201,18 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    flex: 1;
+  }
+  .glyph {
+    flex: none;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--control-bg);
+    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
   .name {
     font-weight: 600;

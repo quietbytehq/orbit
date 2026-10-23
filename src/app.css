@@ -118,3 +118,27 @@ select {
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * Toolbars hold ToolbarButton components. When the toolbar is narrow, labels hide and the
+ * buttons become icon-only; their title attribute then serves as the tooltip.
+ */
+.toolbar {
+  container-type: inline-size;
+}
+@container (max-width: 720px) {
+  .toolbar .tb-label {
+    display: none;
+  }
+  .toolbar .tb {
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+}
+
+/* Buttons and links that carry an icon next to their text. */
+.with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

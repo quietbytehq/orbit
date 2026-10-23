@@ -9,6 +9,7 @@
   import { rcd } from "$lib/stores/rcd.svelte";
   import { endpointLabel } from "$lib/util/endpoint";
   import { nextRunLabel, scheduleLabel } from "$lib/util/schedule";
+  import { Copy, FolderSync, ICON, Pencil, Play, Plus, Square, Trash } from "$lib/icons";
   import { formatBytes, formatDuration, formatSpeed, timeAgo } from "$lib/util/format";
 
   let creating = $state(false);
@@ -67,7 +68,7 @@
 
 <div class="header">
   <h1>Sync</h1>
-  <button class="button primary" onclick={() => (creating = true)}>New job</button>
+  <button class="button primary with-icon" onclick={() => (creating = true)}><Plus {...ICON} />New job</button>
 </div>
 
 <p class="help">
@@ -94,7 +95,7 @@
         <div class="top">
           <div class="title">
             <span class="name">{view.name}</span>
-            <span class="pill">{view.kind === "sync" ? "Sync" : "Copy"}</span>
+            <span class="pill with-icon">{#if view.kind === "sync"}<FolderSync size={12} strokeWidth={2} aria-hidden="true" />Sync{:else}<Copy size={12} strokeWidth={2} aria-hidden="true" />Copy{/if}</span>
             {#if view.schedule.kind !== "manual"}<span class="pill">{scheduleLabel(view.schedule)}</span>{/if}
           </div>
           <label class="toggle">
@@ -131,13 +132,13 @@
 
         <div class="actions">
           {#if view.progress}
-            <button class="button" onclick={() => jobs.act(() => api.cancelJob(view.id))}>Stop</button>
+            <button class="button with-icon" onclick={() => jobs.act(() => api.cancelJob(view.id))}><Square {...ICON} />Stop</button>
           {:else}
-            <button class="button primary" onclick={() => jobs.act(() => api.runJob(view.id))} disabled={rcd.state.state !== "healthy"}>
-              Run now
+            <button class="button primary with-icon" onclick={() => jobs.act(() => api.runJob(view.id))} disabled={rcd.state.state !== "healthy"}>
+              <Play {...ICON} />Run now
             </button>
           {/if}
-          <button class="button" onclick={() => (editing = view)} disabled={view.progress !== null}>Edit</button>
+          <button class="button with-icon" onclick={() => (editing = view)} disabled={view.progress !== null}><Pencil {...ICON} />Edit</button>
           <button class="button" onclick={() => (expanded[view.id] = !expanded[view.id])} aria-expanded={!!expanded[view.id]}>
             {expanded[view.id] ? "Hide history" : `History (${view.runs.length})`}
           </button>
@@ -146,7 +147,7 @@
             <button class="button" onclick={() => (confirmingDelete = null)}>Keep</button>
             <button class="button destructive-fill" onclick={() => remove(view)}>Delete job</button>
           {:else}
-            <button class="button destructive" onclick={() => (confirmingDelete = view)} disabled={view.progress !== null}>Delete…</button>
+            <button class="button destructive with-icon" onclick={() => (confirmingDelete = view)} disabled={view.progress !== null}><Trash {...ICON} />Delete…</button>
           {/if}
         </div>
 

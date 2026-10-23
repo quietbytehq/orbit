@@ -7,6 +7,7 @@
   import { rcd } from "$lib/stores/rcd.svelte";
   import { transfers } from "$lib/stores/transfers.svelte";
   import { remoteBadge, remotesInUse } from "$lib/util/remote";
+  import { ICON, ICON_LG, Plus, providerIcon } from "$lib/icons";
 
   let remotes = $state<RemoteSummary[]>([]);
   let loading = $state(true);
@@ -58,7 +59,7 @@
 
 <div class="header">
   <h1>Remotes</h1>
-  <a class="button primary" href="/remotes/new">Add remote</a>
+  <a class="button primary with-icon" href="/remotes/new"><Plus {...ICON} />Add remote</a>
 </div>
 
 {#if rcd.state.state !== "healthy"}
@@ -81,7 +82,9 @@
   <ul class="list">
     {#each remotes as remote (remote.name)}
       {@const badge = remoteBadge(remote, inUse)}
+      {@const Icon = providerIcon(remote.providerId)}
       <li class="card row">
+        <span class="glyph"><Icon {...ICON_LG} /></span>
         <div class="meta">
           <span class="name">{remote.name}</span>
           <span class="type">{remote.providerTitle}</span>
@@ -126,11 +129,23 @@
     align-items: center;
     gap: 16px;
   }
+  .glyph {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--control-bg);
+    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
   .meta {
     display: flex;
     flex-direction: column;
     gap: 2px;
     min-width: 0;
+    flex: 1;
   }
   .name {
     font-weight: 600;
