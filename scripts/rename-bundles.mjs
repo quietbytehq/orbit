@@ -9,10 +9,12 @@ import { fileURLToPath } from "node:url";
 
 const DISPLAY_NAME = "Orbit for rclone";
 const SHORT_NAME = "orbit";
+/** Only the installable bundles are renamed; Tauri's staging folders are left alone. */
+const BUNDLE_EXTENSIONS = [".AppImage", ".deb", ".msi", ".exe", ".rpm"];
 const here = dirname(fileURLToPath(import.meta.url));
 const roots = [join(here, "..", "src-tauri", "target", "release", "bundle")];
 
-/** Renames every file under `dir` whose name starts with the display name. */
+/** Renames every bundle file under `dir` whose name starts with the display name. */
 export function renameBundles(dir) {
   const renamed = [];
   let entries;
@@ -25,7 +27,7 @@ export function renameBundles(dir) {
     const path = join(dir, entry);
     if (statSync(path).isDirectory()) {
       renamed.push(...renameBundles(path));
-    } else if (entry.startsWith(DISPLAY_NAME)) {
+    } else if (entry.startsWith(DISPLAY_NAME) && BUNDLE_EXTENSIONS.some((ext) => entry.endsWith(ext))) {
       const target = join(dir, SHORT_NAME + entry.slice(DISPLAY_NAME.length));
       renameSync(path, target);
       renamed.push([path, target]);
