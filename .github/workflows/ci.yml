@@ -106,6 +106,9 @@ jobs:
       - name: Build AppImage and deb
         run: npm run tauri build -- --bundles appimage,deb
 
+      - name: Rename bundles to orbit_*
+        run: npm run bundle:rename
+
       - name: List bundles
         run: find src-tauri/target/release/bundle -maxdepth 2 -type f \( -name '*.AppImage' -o -name '*.deb' \) -exec ls -la {} \;
 
@@ -143,6 +146,9 @@ jobs:
 
       - name: Build msi
         run: npm run tauri build -- --bundles msi
+
+      - name: Rename bundles to orbit_*
+        run: npm run bundle:rename
 
       - name: List bundles
         shell: pwsh

@@ -86,7 +86,7 @@ npm run bundle:linux     # fetch rclone, then AppImage and .deb
 npm run bundle:windows   # fetch rclone for Windows, then .msi (run on Windows)
 ```
 
-Outputs go to `src-tauri/target/release/bundle/`.
+Outputs go to `src-tauri/target/release/bundle/`, named `orbit_<version>_…` (the scripts rename Tauri's "Orbit for rclone_…" files; the display name is unchanged).
 
 ### Regenerating icons
 

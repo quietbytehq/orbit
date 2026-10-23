@@ -326,7 +326,12 @@ Each milestone is committed to local git with a message describing it. Nothing i
   `rclone-<target-triple>` (`.exe` on Windows).
 - Linux: `tauri build --bundles appimage,deb`.
 - Windows: `tauri build --bundles msi`.
-- Version: Orbit 0.1.0. App identifier `com.orbit.rclone`.
+- Version: Orbit 0.2.0. App identifier `com.orbit.rclone`.
+- File names: the display name stays "Orbit for rclone" (window titles, Start menu, .desktop entry,
+  installer), but bundle files are named `orbit_<version>_<arch>.AppImage`, `orbit_<version>_<arch>.deb`
+  and `orbit_<version>_<arch>_<lang>.msi`. Tauri derives file names from the product name, so
+  `scripts/rename-bundles.mjs` renames them after `tauri build`; the `bundle:*` npm scripts and CI
+  run it.
 
 ## 9. Out of scope for v0.1 (roadmap)
 
