@@ -105,6 +105,13 @@ select {
   color: inherit;
 }
 
+/* Native radios, checkboxes and progress bars take the app accent instead of the platform's. */
+input[type="radio"],
+input[type="checkbox"],
+progress {
+  accent-color: var(--accent);
+}
+
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

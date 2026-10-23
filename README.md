@@ -11,13 +11,9 @@ Orbit ships its own rclone and runs it as a background daemon (`rclone rcd`) on 
 
 ## Screenshots
 
-Images go in `docs/screenshots/` (see the [list of expected files](docs/screenshots/README.md)).
-
-| | |
-|---|---|
-| ![Overview](docs/screenshots/overview.png) <br> *Overview* | ![Cloud storage](docs/screenshots/storage.png) <br> *Cloud storage* |
-| ![File browser](docs/screenshots/browse.png) <br> *File browser* | ![Backup & sync](docs/screenshots/backup.png) <br> *Backup & sync* |
-| ![Drives](docs/screenshots/drives.png) <br> *Drives (Windows) / Folders (Linux)* | ![Settings](docs/screenshots/settings.png) <br> *Settings* |
+| Cloud storage | Backup & sync | Settings |
+|---|---|---|
+| ![Cloud storage](docs/screenshots/storage.png) | ![Backup & sync](docs/screenshots/backup.png) | ![Settings](docs/screenshots/settings.png) |
 
 ## Install
 
