@@ -99,4 +99,8 @@ fi
 # Re-run this script inside a virtual display with its own D-Bus session (the single-instance
 # check and the tray use D-Bus on Linux).
 export ORBIT_SMOKE_INNER=1
-exec xvfb-run -a -s "-screen 0 1280x800x24" dbus-run-session -- "$0" "$BIN"
+XVFB_ARGS="-screen 0 1280x800x24"
+# A strict snap sees its own /tmp, so the authority cookie xvfb-run keeps there is out of its
+# reach; let the virtual display accept connections without one.
+[ -z "${ORBIT_SMOKE_SNAP:-}" ] || XVFB_ARGS="$XVFB_ARGS -ac"
+exec xvfb-run -a -s "$XVFB_ARGS" dbus-run-session -- "$0" "$BIN"

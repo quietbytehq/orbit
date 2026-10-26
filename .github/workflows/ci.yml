@@ -220,7 +220,10 @@ jobs:
       # set up a device cgroup), and `snap run` can only create one over the system bus here,
       # which it falls back to for root only. The script's dbus-run-session has no systemd --user.
       - name: Launch twice and quit (smoke test against the snap)
-        run: sudo -E scripts/smoke-quit.sh /snap/bin/orbit
+        run: |
+          # Root has no login session on the runner; the snap's launcher expects this folder.
+          sudo mkdir -p -m 700 /run/user/0
+          sudo -E scripts/smoke-quit.sh /snap/bin/orbit
 
       - uses: actions/upload-artifact@v4
         with:
