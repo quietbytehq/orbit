@@ -44,11 +44,26 @@ wait_until() { # wait_until <seconds> <command...>
 orbit_count() { pgrep -c -x orbit || true; }
 rcd_count() { count rclone; }
 
+# Orbit's data folder: inside a strict snap it sits under the snap's own home.
+data_dir() {
+  if [ -n "${ORBIT_SMOKE_SNAP:-}" ]; then
+    echo "$(getent passwd "$(id -u)" | cut -d: -f6)/snap/orbit/current/.local/share/com.orbit.rclone"
+  else
+    echo "${XDG_DATA_HOME:-$HOME/.local/share}/com.orbit.rclone"
+  fi
+}
+diagnose() { # diagnose <log file>: what the app printed, what rclone logged, what is running
+  echo "--- $1"; cat "$1" 2>/dev/null || true
+  local rlog; rlog="$(data_dir)/logs/rclone.log"
+  echo "--- $rlog"; tail -n 40 "$rlog" 2>/dev/null || echo "(no rclone log)"
+  echo "--- processes"; pgrep -a -x orbit || true; pgrep -a -x rclone || true
+}
+
 run_test() {
   echo "== starting the first Orbit"
   "$BIN" >"$HOME/first.log" 2>&1 &
   FIRST=$!
-  wait_until 60 bash -c '[ "$(pgrep -c -x rclone || true)" -ge 1 ]' || { echo "FAIL: rclone did not start"; cat "$HOME/first.log"; return 1; }
+  wait_until 60 bash -c '[ "$(pgrep -c -x rclone || true)" -ge 1 ]' || { echo "FAIL: rclone did not start"; diagnose "$HOME/first.log"; return 1; }
   # Let the splash finish and the window settle before the second launch.
   sleep "${ORBIT_SMOKE_SNAP:+8}${ORBIT_SMOKE_SNAP:-2}"
   echo "   orbit: $(orbit_count), rclone rcd: $(rcd_count)"
@@ -56,7 +71,7 @@ run_test() {
   echo "== launching a second Orbit (must exit on its own)"
   if timeout 15 "$BIN" >"$HOME/second.log" 2>&1; then :; else
     code=$?
-    [ "$code" -ne 124 ] || { echo "FAIL: the second Orbit did not exit"; cat "$HOME/second.log"; return 1; }
+    [ "$code" -ne 124 ] || { echo "FAIL: the second Orbit did not exit"; diagnose "$HOME/second.log"; return 1; }
   fi
   sleep 1
   [ "$(orbit_count)" -eq 1 ] || { echo "FAIL: expected 1 orbit process, found $(orbit_count)"; return 1; }
@@ -65,7 +80,7 @@ run_test() {
 
   echo "== asking it to quit (--quit)"
   timeout 15 "$BIN" --quit >"$HOME/quit.log" 2>&1 || true
-  wait_until 30 bash -c '! kill -0 '"$FIRST"' 2>/dev/null' || { echo "FAIL: the first Orbit is still running"; cat "$HOME/first.log"; return 1; }
+  wait_until 30 bash -c '! kill -0 '"$FIRST"' 2>/dev/null' || { echo "FAIL: the first Orbit is still running"; diagnose "$HOME/first.log"; return 1; }
   sleep 1
   [ "$(orbit_count)" -eq 0 ] || { echo "FAIL: orbit processes remain: $(orbit_count)"; return 1; }
   [ "$(rcd_count)" -eq 0 ] || { echo "FAIL: rclone rcd processes remain: $(rcd_count)"; return 1; }

@@ -205,8 +205,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends xvfb dbus-x11 procps
 
+      # Informational: what the confined app sees. (Library lookups here lack the launch-time
+      # environment, so a "not found" is a hint, not a verdict; the launch below is the test.)
+      - name: Look inside the snap
+        run: |
+          sudo snap run --shell orbit -c '
+            echo "HOME=$HOME SNAP=$SNAP"
+            ls -la "$SNAP/usr/bin"
+            ldd "$SNAP/usr/bin/orbit" 2>&1 | grep "not found" || echo "all libraries resolve"
+            "$SNAP/usr/bin/rclone" version | head -1
+          ' || true
+
+      # Runs as root: snap-confine needs the app in a snapd-tracked cgroup (core24 + fuse-support
+      # set up a device cgroup), and `snap run` can only create one over the system bus here,
+      # which it falls back to for root only. The script's dbus-run-session has no systemd --user.
       - name: Launch twice and quit (smoke test against the snap)
-        run: scripts/smoke-quit.sh /snap/bin/orbit
+        run: sudo -E scripts/smoke-quit.sh /snap/bin/orbit
 
       - uses: actions/upload-artifact@v4
         with:

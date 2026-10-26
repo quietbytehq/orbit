@@ -62,6 +62,7 @@ parts:
     stage-packages:
       - fuse3
       - libayatana-appindicator3-1
+      - libwebkit2gtk-4.1-0
     override-build: |
       craftctl default
       # Tauri names the desktop entry after the product name, with spaces; the snap wants a
