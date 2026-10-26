@@ -28,6 +28,14 @@ issues: https://github.com/quietbytehq/orbit/issues
 platforms:
   amd64:
 
+# Only one Orbit runs at a time: a second launch hands its arguments to the first over the
+# session bus and exits. Under strict confinement, owning that bus name needs this slot.
+slots:
+  single-instance:
+    interface: dbus
+    bus: session
+    name: com.orbit.rclone.SingleInstance
+
 apps:
   orbit:
     command: usr/bin/orbit
@@ -35,6 +43,7 @@ apps:
     # The start-at-sign-in setting writes this file into the snap's own autostart folder.
     autostart: orbit.desktop
     extensions: [gnome]
+    slots: [single-instance]
     plugs:
       - network
       - network-bind

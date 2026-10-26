@@ -57,6 +57,9 @@ diagnose() { # diagnose <log file>: what the app printed, what rclone logged, wh
   local rlog; rlog="$(data_dir)/logs/rclone.log"
   echo "--- $rlog"; tail -n 40 "$rlog" 2>/dev/null || echo "(no rclone log)"
   echo "--- processes"; pgrep -a -x orbit || true; pgrep -a -x rclone || true
+  if [ -n "${ORBIT_SMOKE_SNAP:-}" ]; then
+    echo "--- confinement denials"; dmesg 2>/dev/null | grep -i 'apparmor="DENIED"' | tail -n 30 || true
+  fi
 }
 
 run_test() {
@@ -87,11 +90,26 @@ run_test() {
   echo "   clean quit OK (no orbit, no rclone)"
 }
 
-cleanup() { pkill -x orbit 2>/dev/null || true; pkill -x rclone 2>/dev/null || true; }
+cleanup() {
+  pkill -x orbit 2>/dev/null || true; pkill -x rclone 2>/dev/null || true
+  [ -z "${BUS_PID:-}" ] || kill "$BUS_PID" 2>/dev/null || true
+}
 
 if [ "${ORBIT_SMOKE_INNER:-}" = "1" ]; then
   # Inside the virtual display and the D-Bus session.
   trap cleanup EXIT
+  if [ -n "${ORBIT_SMOKE_SNAP:-}" ]; then
+    # A strict snap cannot see a bus socket in the host's /tmp (where dbus-run-session puts
+    # one); it can reach the user's runtime folder, so the session bus goes there, as it does
+    # on a real desktop.
+    export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    mkdir -p -m 700 "$XDG_RUNTIME_DIR"
+    rm -f "$XDG_RUNTIME_DIR/bus"
+    dbus-daemon --session --nofork --nopidfile --address="unix:path=$XDG_RUNTIME_DIR/bus" &
+    BUS_PID=$!
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+    wait_until 10 test -S "$XDG_RUNTIME_DIR/bus" || { echo "FAIL: no session bus"; exit 1; }
+  fi
   run_test
   exit $?
 fi
@@ -100,7 +118,9 @@ fi
 # check and the tray use D-Bus on Linux).
 export ORBIT_SMOKE_INNER=1
 XVFB_ARGS="-screen 0 1280x800x24"
-# A strict snap sees its own /tmp, so the authority cookie xvfb-run keeps there is out of its
-# reach; let the virtual display accept connections without one.
-[ -z "${ORBIT_SMOKE_SNAP:-}" ] || XVFB_ARGS="$XVFB_ARGS -ac"
+if [ -n "${ORBIT_SMOKE_SNAP:-}" ]; then
+  # A strict snap sees its own /tmp, so the authority cookie xvfb-run keeps there is out of its
+  # reach; let the virtual display accept connections without one. The bus is started inside.
+  exec xvfb-run -a -s "$XVFB_ARGS -ac" "$0" "$BIN"
+fi
 exec xvfb-run -a -s "$XVFB_ARGS" dbus-run-session -- "$0" "$BIN"
