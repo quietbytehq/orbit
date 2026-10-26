@@ -4,10 +4,10 @@ A desktop app for [rclone](https://rclone.org). Connect cloud storage, browse an
 
 Orbit ships its own rclone and runs it as a background daemon (`rclone rcd`) on the loopback interface. The app talks to it through rclone's JSON remote-control API.
 
-- **Platforms:** Linux (AppImage, `.deb`) and Windows (`.msi`).
+- **Platforms:** Linux (AppImage, `.deb`, snap) and Windows (`.msi`).
 - **Stack:** Tauri 2 (Rust), SvelteKit in SPA mode, TypeScript.
 - **Design:** see [SPEC.md](SPEC.md). Contributor rules are in [CLAUDE.md](CLAUDE.md).
-- **Changes:** see [CHANGELOG.md](CHANGELOG.md). Licence: [MIT](LICENSE).
+- **Changes:** see [CHANGELOG.md](CHANGELOG.md). Licence: [Apache-2.0](LICENSE).
 
 ## Screenshots
 
@@ -23,8 +23,8 @@ The releases are not code-signed yet, so both Windows and some Linux desktops wi
 ### Linux: AppImage
 
 ```bash
-chmod +x orbit_0.2.0_amd64.AppImage
-./orbit_0.2.0_amd64.AppImage
+chmod +x orbit_1.0.0_amd64.AppImage
+./orbit_1.0.0_amd64.AppImage
 ```
 
 Needs a 64-bit x86 system with WebKitGTK 4.1 (Ubuntu 22.04 or newer, Fedora 37 or newer, and
@@ -35,15 +35,28 @@ install FUSE 3 (`sudo apt install fuse3` on Debian and Ubuntu); Orbit tells you 
 ### Linux: Debian and Ubuntu package
 
 ```bash
-sudo apt install ./orbit_0.2.0_amd64.deb
+sudo apt install ./orbit_1.0.0_amd64.deb
 ```
 
 This pulls in WebKitGTK and the tray library. Orbit then appears in your application menu as
 "Orbit for rclone". Install `fuse3` as above to use folders.
 
+### Linux: snap
+
+```bash
+sudo snap install --dangerous ./orbit_1.0.0_amd64.snap   # from a release file; the store listing comes later
+sudo snap connect orbit:fuse-support                      # needed for Drives, see below
+```
+
+The snap is strictly confined. It can reach the network, your home folder and removable media,
+and shows its tray icon through the desktop interfaces. **Showing storage as a folder needs
+`fuse-support`**, which the store does not connect automatically yet, so run the `snap connect`
+line above once; without it the Folders page says FUSE is unavailable. Everything else works
+without it. Inside the snap, "Start Orbit when I sign in" uses the snap's own autostart entry.
+
 ### Windows: installer
 
-Run `orbit_0.2.0_x64_en-US.msi`. Windows 10 or 11, 64-bit; WebView2 is already present on current
+Run `orbit_1.0.0_x64_en-US.msi`. Windows 10 or 11, 64-bit; WebView2 is already present on current
 systems. Because the installer is not signed, SmartScreen may show "Windows protected your PC":
 click **More info**, then **Run anyway**. Orbit installs per machine and adds a Start menu entry.
 
@@ -177,14 +190,17 @@ Everything is under the Tauri app data folder: `~/.local/share/com.orbit.rclone`
 
 ## Releases
 
-Every push runs CI (tests on Linux, bundles on Linux and Windows). Pushing a tag `v*` additionally
-creates a GitHub Release with the AppImage, `.deb` and `.msi` attached, once the test job is green.
+Every push runs CI (tests and a launch-and-quit smoke test on Linux, bundles on Linux and Windows,
+the snap). Pushing a tag `v*` additionally creates a GitHub Release with the AppImage, `.deb`,
+`.snap` and `.msi` attached, once the test jobs are green.
 
 ## Licence and third-party
 
-Orbit is released under the [MIT licence](LICENSE), copyright Quietbyte.
+Orbit is released under the [Apache License 2.0](LICENSE), copyright 2026 QuietByte. See
+[NOTICE](NOTICE) for the bundled third-party software.
 
-- [rclone](https://rclone.org), MIT licence, bundled as a sidecar binary.
+- [rclone](https://rclone.org), MIT licence, bundled unmodified as a separate sidecar binary and
+  run as a background process. Orbit is not affiliated with the rclone project.
 - [Inter](https://rsms.me/inter/) typeface, SIL Open Font License 1.1, bundled in `static/fonts/` with its licence file.
 
 ## Roadmap

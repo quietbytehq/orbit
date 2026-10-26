@@ -19,6 +19,7 @@
   let finished = false;
   /** Which version plays. Set once the backend has answered; nothing animates before that. */
   let line = $state<Timeline | null>(null);
+  let version = $state("");
 
   const ringTiming = $derived(line ? phaseTiming(line, "ring") : [0, 0]);
   const cloudTiming = $derived(line ? phaseTiming(line, "cloud") : [0, 0]);
@@ -57,6 +58,7 @@
 
   onMount(() => {
     void api.getSettings().then((settings) => applyTheme(settings.theme)).catch(() => {});
+    void api.appInfo().then((info) => (version = info.version)).catch(() => {});
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     still = reduced;
@@ -146,7 +148,7 @@
       All your clouds, in one orbit.
     </p>
     <p class="footer" style:animation-delay="{footerTiming[0]}ms" style:animation-duration="{footerTiming[1]}ms">
-      Powered by rclone · v0.2
+      Powered by rclone{version ? ` · v${version}` : ""}
     </p>
   </div>
 </div>

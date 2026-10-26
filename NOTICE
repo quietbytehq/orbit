@@ -1,0 +1,18 @@
+Orbit for rclone
+Copyright 2026 QuietByte
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product bundles third-party software:
+
+- rclone (https://rclone.org), Copyright (C) 2012 by Nick Craig-Wood and contributors,
+  licensed under the MIT License. It is shipped unmodified as a separate binary next to Orbit
+  and run as a background process. Its licence text is available at
+  https://github.com/rclone/rclone/blob/master/COPYING.
+
+- Inter typeface (https://rsms.me/inter/), Copyright 2016 The Inter Project Authors,
+  licensed under the SIL Open Font License, Version 1.1 (see static/fonts/LICENSE-Inter.txt).
+
+- Lucide icons (https://lucide.dev), ISC License, Copyright (c) for portions of Lucide are held
+  by Cole Bemis 2013-2022 as part of Feather (MIT), all other copyright for Lucide are held by
+  Lucide Contributors 2022.

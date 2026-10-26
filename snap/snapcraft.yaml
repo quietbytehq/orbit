@@ -1,0 +1,76 @@
+# Snap package for Orbit for rclone.
+#
+# Built from the .deb that `tauri build` produces (CI builds the deb first, then runs snapcraft),
+# so the snap holds exactly the same binaries as the other Linux packages: the orbit executable
+# and the bundled rclone sidecar next to it. The gnome extension supplies the GTK and WebKitGTK
+# runtime from the platform snap, and the desktop interfaces.
+name: orbit
+title: Orbit for rclone
+base: core24
+version: "1.0.0"
+summary: Cloud storage, backups and drives, powered by rclone
+description: |
+  Orbit connects Google Drive, OneDrive, Dropbox, S3, SFTP and network shares, lets you browse
+  and move files, keeps backups in sync on a schedule, and shows cloud storage as a folder on
+  this computer. It bundles rclone and runs it in the background; you never configure rclone
+  yourself.
+
+  Showing storage as a folder needs the fuse-support interface, which the store does not
+  connect automatically yet: run `sudo snap connect orbit:fuse-support` once.
+license: Apache-2.0
+grade: stable
+confinement: strict
+compression: lzo
+website: https://github.com/quietbytehq/orbit
+source-code: https://github.com/quietbytehq/orbit
+issues: https://github.com/quietbytehq/orbit/issues
+
+platforms:
+  amd64:
+
+apps:
+  orbit:
+    command: usr/bin/orbit
+    desktop: usr/share/applications/orbit.desktop
+    # The start-at-sign-in setting writes this file into the snap's own autostart folder.
+    autostart: orbit.desktop
+    extensions: [gnome]
+    plugs:
+      - network
+      - network-bind
+      - home
+      - removable-media
+      - fuse-support
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+      - unity7
+      - gsettings
+      - opengl
+    environment:
+      # rclone spawns fusermount3; both live in the snap.
+      PATH: $SNAP/usr/bin:$SNAP/bin:$PATH
+      WEBKIT_DISABLE_COMPOSITING_MODE: "1"
+
+parts:
+  orbit:
+    plugin: dump
+    # The .deb from `npm run bundle:linux` (or the orbit-linux-x86_64 CI artifact).
+    source: dist/orbit_1.0.0_amd64.deb
+    source-type: deb
+    stage-packages:
+      - fuse3
+      - libayatana-appindicator3-1
+    override-build: |
+      craftctl default
+      # Tauri names the desktop entry after the product name, with spaces; the snap wants a
+      # fixed name, and the Exec line must call the snap's command.
+      apps="$CRAFT_PART_INSTALL/usr/share/applications"
+      if [ -f "$apps/Orbit for rclone.desktop" ]; then
+        mv "$apps/Orbit for rclone.desktop" "$apps/orbit.desktop"
+      fi
+      sed -i 's|^Exec=.*|Exec=orbit %U|; s|^Icon=.*|Icon=${SNAP}/usr/share/icons/hicolor/128x128/apps/orbit.png|' "$apps/orbit.desktop"
+    prime:
+      - -usr/share/doc
+      - -usr/share/man

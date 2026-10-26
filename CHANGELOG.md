@@ -3,6 +3,22 @@
 All notable changes to Orbit for rclone. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] - 2026-10-26
+
+First stable release. Everything in 0.2.x, plus:
+
+### Changed
+- Licence changed from MIT to the Apache License 2.0 (LICENSE, NOTICE). rclone remains MIT and is
+  bundled unmodified.
+- Version number promoted to 1.0.0; the splash footer and the About information read the version
+  from the build instead of a hard-coded string.
+
+### Added
+- Snap package (`snap/snapcraft.yaml`, core24, strict confinement) built in CI and attached to
+  releases. Drives need `sudo snap connect orbit:fuse-support` until the store auto-connects it.
+- The start-at-sign-in entry is named `orbit` on every platform (and is the snap's own autostart
+  entry inside the snap).
+
 ## [0.2.1] - 2026-10-23
 
 ### Fixed
@@ -78,6 +94,7 @@ Initial release.
 - Settings: theme, concurrent transfers, custom rclone path, log level, splash on or off.
 - Packaging as AppImage and .deb on Linux and .msi on Windows.
 
+[1.0.0]: https://github.com/quietbytehq/orbit/releases/tag/v1.0.0
 [0.2.1]: https://github.com/quietbytehq/orbit/releases/tag/v0.2.1
 [0.2.0]: https://github.com/quietbytehq/orbit/releases/tag/v0.2.0
 [0.1.0]: https://github.com/quietbytehq/orbit/releases/tag/v0.1.0

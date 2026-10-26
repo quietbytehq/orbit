@@ -1,8 +1,9 @@
 [package]
 name = "orbit"
-version = "0.2.1"
+version = "1.0.0"
 description = "Orbit for rclone: a desktop app for cloud storage, backups and drives"
-authors = ["Orbit contributors"]
+authors = ["QuietByte"]
+license = "Apache-2.0"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

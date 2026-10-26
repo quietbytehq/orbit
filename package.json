@@ -1,6 +1,6 @@
 {
   "name": "orbit-for-rclone",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "description": "",
   "type": "module",
   "scripts": {
@@ -19,7 +19,7 @@
     "bundle:linux": "npm run fetch:rclone && tauri build --bundles appimage,deb && npm run bundle:rename",
     "bundle:windows": "npm run fetch:rclone:windows && tauri build --bundles msi && npm run bundle:rename"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "@lucide/svelte": "^1.61.0",
     "@tauri-apps/api": "^2",

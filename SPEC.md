@@ -146,7 +146,7 @@ The same colors are used for the tray icons and for the status badges on remotes
   - **Short**, 1.5 s: every other launch.
   - Base phases, in order: the orbit ring draws itself and satellites start orbiting; the cloud
     fades and scales in at the centre; the "Orbit" wordmark fades up; the tagline "All your clouds,
-    in one orbit." fades in; "Powered by rclone · v0.2" appears at the bottom.
+    in one orbit." fades in; "Powered by rclone · v<version>" appears at the bottom.
   - After the sequence, the content fades to the splash background over 0.3 s, then the splash
     finishes and its window closes, so the cut to the main window is soft.
 - Setting "Intro animation": **Full** (always the full version), **Short** (default: short, with
@@ -335,9 +335,15 @@ Each milestone is committed to local git with a message describing it. Nothing i
   `scripts/fetch-rclone.ps1` (Windows) download the official build from `downloads.rclone.org`,
   verify the SHA256 from `SHA256SUMS`, and place it in `src-tauri/binaries/` as
   `rclone-<target-triple>` (`.exe` on Windows).
-- Linux: `tauri build --bundles appimage,deb`.
+- Linux: `tauri build --bundles appimage,deb`, then `snapcraft` for the snap (CI does both).
 - Windows: `tauri build --bundles msi`.
-- Version: Orbit 0.2.1. App identifier `com.orbit.rclone`.
+- Version: Orbit 1.0.0. App identifier `com.orbit.rclone`.
+- Licence: Apache-2.0 (LICENSE, NOTICE). rclone is MIT and bundled unmodified as a sidecar.
+- Snap: `snap/snapcraft.yaml`, base core24, strict confinement, built from the `.deb` with the
+  gnome extension. Interfaces: network, network-bind, home, removable-media, fuse-support (drives),
+  desktop, desktop-legacy, wayland, x11, unity7 (tray), gsettings, opengl. Until the store grants
+  auto-connection, drives need `sudo snap connect orbit:fuse-support`. The start-at-sign-in entry
+  is the snap's own autostart desktop file.
 - File names: the display name stays "Orbit for rclone" (window titles, Start menu, .desktop entry,
   installer), but bundle files are named `orbit_<version>_<arch>.AppImage`, `orbit_<version>_<arch>.deb`
   and `orbit_<version>_<arch>_<lang>.msi`. Tauri derives file names from the product name, so

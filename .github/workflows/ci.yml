@@ -5,8 +5,11 @@
 # bundle-linux:   Linux. AppImage and .deb, uploaded as artifacts.
 # bundle-windows: Windows. .msi, uploaded as an artifact. Also runs the Rust tests and reports
 #                 the per-test results in the job summary without failing the job.
+# snap-linux:     Linux. Builds the snap from the .deb (snapcraft, strict confinement), installs
+#                 it on the runner, connects its interfaces and runs the launch-and-quit smoke
+#                 test against /snap/bin/orbit. Uploads the .snap as an artifact.
 # release:        Only for a pushed tag v*. Creates the GitHub Release and attaches the AppImage,
-#                 .deb and .msi from the bundle jobs, once the check job is green.
+#                 .deb, .snap and .msi from the bundle jobs, once the check jobs are green.
 name: CI
 
 on:
@@ -166,6 +169,51 @@ jobs:
             src-tauri/target/release/bundle/appimage/*.AppImage
             src-tauri/target/release/bundle/deb/*.deb
 
+  snap-linux:
+    name: Snap (build, install, launch)
+    needs: [bundle-linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: orbit-linux-x86_64
+          path: artifact
+
+      - name: Place the deb where snapcraft.yaml expects it
+        run: |
+          mkdir -p dist
+          cp artifact/deb/*.deb dist/
+          ls -la dist
+
+      - name: Build the snap
+        id: snapcraft
+        uses: snapcore/action-build@v1
+
+      - name: Install the snap and connect its interfaces
+        run: |
+          sudo snap install --dangerous "${{ steps.snapcraft.outputs.snap }}"
+          for plug in network network-bind home removable-media fuse-support desktop desktop-legacy wayland x11 unity7 gsettings opengl; do
+            sudo snap connect "orbit:$plug" || echo "could not connect $plug (may be auto-connected or unavailable here)"
+          done
+          snap connections orbit || true
+
+      - name: Install tools for the launch test
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb dbus-x11 procps
+
+      - name: Launch twice and quit (smoke test against the snap)
+        run: scripts/smoke-quit.sh /snap/bin/orbit
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: orbit-linux-snap
+          if-no-files-found: error
+          path: ${{ steps.snapcraft.outputs.snap }}
+
   bundle-windows:
     name: Bundle (Windows msi) and Rust tests
     runs-on: windows-latest
@@ -255,7 +303,7 @@ jobs:
   release:
     name: GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [check, smoke-linux, bundle-linux, bundle-windows]
+    needs: [check, smoke-linux, bundle-linux, snap-linux, bundle-windows]
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     permissions:
@@ -279,4 +327,5 @@ jobs:
           files: |
             dist/**/*.AppImage
             dist/**/*.deb
+            dist/**/*.snap
             dist/**/*.msi

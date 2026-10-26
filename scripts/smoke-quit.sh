@@ -14,15 +14,24 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${1:-$ROOT/src-tauri/target/debug/orbit}"
 [ -x "$BIN" ] || { echo "No Orbit binary at $BIN (build with: npm run tauri build -- --debug --no-bundle)" >&2; exit 2; }
 
-# A throwaway home so this run uses fresh settings and touches nothing of the user's.
 if [ "${ORBIT_SMOKE_INNER:-}" != "1" ]; then
-  export HOME="$(mktemp -d)"
+  case "$BIN" in
+    /snap/bin/*)
+      # A strict snap keeps its own home under ~/snap/orbit; settings cannot be preset from
+      # outside, so the splash plays and the first launch takes a little longer.
+      export ORBIT_SMOKE_SNAP=1
+      ;;
+    *)
+      # A throwaway home so this run uses fresh settings and touches nothing of the user's.
+      export HOME="$(mktemp -d)"
+      export XDG_DATA_HOME="$HOME/.local/share" XDG_CONFIG_HOME="$HOME/.config" XDG_CACHE_HOME="$HOME/.cache"
+      mkdir -p "$XDG_DATA_HOME/com.orbit.rclone"
+      # No splash, so the first instance is ready sooner.
+      echo '{"splash":"off"}' > "$XDG_DATA_HOME/com.orbit.rclone/settings.json"
+      ;;
+  esac
 fi
-export XDG_DATA_HOME="$HOME/.local/share" XDG_CONFIG_HOME="$HOME/.config" XDG_CACHE_HOME="$HOME/.cache"
 export PATH="$ROOT/src-tauri/binaries:$PATH"
-mkdir -p "$XDG_DATA_HOME/com.orbit.rclone"
-# No splash, so the first instance is ready sooner.
-echo '{"splash":"off"}' > "$XDG_DATA_HOME/com.orbit.rclone/settings.json"
 # Software rendering: there is no GPU on a virtual display.
 export WEBKIT_DISABLE_COMPOSITING_MODE=1 LIBGL_ALWAYS_SOFTWARE=1
 
@@ -39,8 +48,9 @@ run_test() {
   echo "== starting the first Orbit"
   "$BIN" >"$HOME/first.log" 2>&1 &
   FIRST=$!
-  wait_until 30 bash -c '[ "$(pgrep -c -x rclone || true)" -ge 1 ]' || { echo "FAIL: rclone did not start"; cat "$HOME/first.log"; return 1; }
-  sleep 2
+  wait_until 60 bash -c '[ "$(pgrep -c -x rclone || true)" -ge 1 ]' || { echo "FAIL: rclone did not start"; cat "$HOME/first.log"; return 1; }
+  # Let the splash finish and the window settle before the second launch.
+  sleep "${ORBIT_SMOKE_SNAP:+8}${ORBIT_SMOKE_SNAP:-2}"
   echo "   orbit: $(orbit_count), rclone rcd: $(rcd_count)"
 
   echo "== launching a second Orbit (must exit on its own)"
