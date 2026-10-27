@@ -23,8 +23,8 @@ The releases are not code-signed yet, so both Windows and some Linux desktops wi
 ### Linux: AppImage
 
 ```bash
-chmod +x orbit_1.0.0_amd64.AppImage
-./orbit_1.0.0_amd64.AppImage
+chmod +x orbit_1.0.1_amd64.AppImage
+./orbit_1.0.1_amd64.AppImage
 ```
 
 Needs a 64-bit x86 system with WebKitGTK 4.1 (Ubuntu 22.04 or newer, Fedora 37 or newer, and
@@ -35,7 +35,7 @@ install FUSE 3 (`sudo apt install fuse3` on Debian and Ubuntu); Orbit tells you 
 ### Linux: Debian and Ubuntu package
 
 ```bash
-sudo apt install ./orbit_1.0.0_amd64.deb
+sudo apt install ./orbit_1.0.1_amd64.deb
 ```
 
 This pulls in WebKitGTK and the tray library. Orbit then appears in your application menu as
@@ -44,8 +44,9 @@ This pulls in WebKitGTK and the tray library. Orbit then appears in your applica
 ### Linux: snap
 
 ```bash
-sudo snap install --dangerous ./orbit_1.0.0_amd64.snap   # from a release file; the store listing comes later
-sudo snap connect orbit:fuse-support                      # needed for Drives, see below
+sudo snap install orbit-rclone                                  # from the Snap Store
+sudo snap install --dangerous ./orbit-rclone_1.0.1_amd64.snap   # or from a release file
+sudo snap connect orbit-rclone:fuse-support                     # needed for Drives, see below
 ```
 
 The snap is strictly confined. It can reach the network, your home folder and removable media,
@@ -53,10 +54,12 @@ and shows its tray icon through the desktop interfaces. **Showing storage as a f
 `fuse-support`**, which the store does not connect automatically yet, so run the `snap connect`
 line above once; without it the Folders page says FUSE is unavailable. Everything else works
 without it. Inside the snap, "Start Orbit when I sign in" uses the snap's own autostart entry.
+The snap is called `orbit-rclone` (the name `orbit` was taken on the store); the app still shows
+up as "Orbit for rclone", and `orbit-rclone` on a command line launches it.
 
 ### Windows: installer
 
-Run `orbit_1.0.0_x64_en-US.msi`. Windows 10 or 11, 64-bit; WebView2 is already present on current
+Run `orbit_1.0.1_x64_en-US.msi`. Windows 10 or 11, 64-bit; WebView2 is already present on current
 systems. Because the installer is not signed, SmartScreen may show "Windows protected your PC":
 click **More info**, then **Run anyway**. Orbit installs per machine and adds a Start menu entry.
 

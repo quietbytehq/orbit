@@ -7,7 +7,7 @@
 #                 the per-test results in the job summary without failing the job.
 # snap-linux:     Linux. Builds the snap from the .deb (snapcraft, strict confinement), installs
 #                 it on the runner, connects its interfaces and runs the launch-and-quit smoke
-#                 test against /snap/bin/orbit. Uploads the .snap as an artifact.
+#                 test against /snap/bin/orbit-rclone. Uploads the .snap as an artifact.
 # release:        Only for a pushed tag v*. Creates the GitHub Release and attaches the AppImage,
 #                 .deb, .snap and .msi from the bundle jobs, once the check jobs are green.
 name: CI
@@ -196,9 +196,9 @@ jobs:
         run: |
           sudo snap install --dangerous "${{ steps.snapcraft.outputs.snap }}"
           for plug in network network-bind home removable-media fuse-support desktop desktop-legacy wayland x11 unity7 gsettings opengl; do
-            sudo snap connect "orbit:$plug" || echo "could not connect $plug (may be auto-connected or unavailable here)"
+            sudo snap connect "orbit-rclone:$plug" || echo "could not connect $plug (may be auto-connected or unavailable here)"
           done
-          snap connections orbit || true
+          snap connections orbit-rclone || true
 
       - name: Install tools for the launch test
         run: |
@@ -209,7 +209,7 @@ jobs:
       # environment, so a "not found" is a hint, not a verdict; the launch below is the test.)
       - name: Look inside the snap
         run: |
-          sudo snap run --shell orbit -c '
+          sudo snap run --shell orbit-rclone -c '
             echo "HOME=$HOME SNAP=$SNAP"
             ls -la "$SNAP/usr/bin"
             ldd "$SNAP/usr/bin/orbit" 2>&1 | grep "not found" || echo "all libraries resolve"
@@ -220,7 +220,7 @@ jobs:
       # set up a device cgroup), and `snap run` can only create one over the system bus here,
       # which it falls back to for root only. The script's dbus-run-session has no systemd --user.
       - name: Launch twice and quit (smoke test against the snap)
-        run: sudo -E scripts/smoke-quit.sh /snap/bin/orbit
+        run: sudo -E scripts/smoke-quit.sh /snap/bin/orbit-rclone
 
       - uses: actions/upload-artifact@v4
         with:

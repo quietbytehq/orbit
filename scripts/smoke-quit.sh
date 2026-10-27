@@ -17,7 +17,7 @@ BIN="${1:-$ROOT/src-tauri/target/debug/orbit}"
 if [ "${ORBIT_SMOKE_INNER:-}" != "1" ]; then
   case "$BIN" in
     /snap/bin/*)
-      # A strict snap keeps its own home under ~/snap/orbit; settings cannot be preset from
+      # A strict snap keeps its own home under ~/snap/orbit-rclone; settings cannot be preset from
       # outside, so the splash plays and the first launch takes a little longer.
       export ORBIT_SMOKE_SNAP=1
       ;;
@@ -47,7 +47,7 @@ rcd_count() { count rclone; }
 # Orbit's data folder: inside a strict snap it sits under the snap's own home.
 data_dir() {
   if [ -n "${ORBIT_SMOKE_SNAP:-}" ]; then
-    echo "$(getent passwd "$(id -u)" | cut -d: -f6)/snap/orbit/current/.local/share/com.orbit.rclone"
+    echo "$(getent passwd "$(id -u)" | cut -d: -f6)/snap/orbit-rclone/current/.local/share/com.orbit.rclone"
   else
     echo "${XDG_DATA_HOME:-$HOME/.local/share}/com.orbit.rclone"
   fi

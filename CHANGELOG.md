@@ -3,6 +3,15 @@
 All notable changes to Orbit for rclone. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-10-27
+
+### Changed
+- The snap is published as `orbit-rclone` (the store name `orbit` was taken). Its command is
+  `orbit-rclone`, so `/snap/bin/orbit-rclone` launches it; the app is still "Orbit for rclone".
+  Drives need `sudo snap connect orbit-rclone:fuse-support` until the store auto-connects it.
+- The snap declares the session-bus name used to keep a single Orbit running, so a second launch
+  inside the snap hands over to the first instead of starting again.
+
 ## [1.0.0] - 2026-10-26
 
 First stable release. Everything in 0.2.x, plus:

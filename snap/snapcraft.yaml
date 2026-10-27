@@ -4,10 +4,10 @@
 # so the snap holds exactly the same binaries as the other Linux packages: the orbit executable
 # and the bundled rclone sidecar next to it. The gnome extension supplies the GTK and WebKitGTK
 # runtime from the platform snap, and the desktop interfaces.
-name: orbit
+name: orbit-rclone
 title: Orbit for rclone
 base: core24
-version: "1.0.0"
+version: "1.0.1"
 summary: Cloud storage, backups and drives, powered by rclone
 description: |
   Orbit connects Google Drive, OneDrive, Dropbox, S3, SFTP and network shares, lets you browse
@@ -16,7 +16,7 @@ description: |
   yourself.
 
   Showing storage as a folder needs the fuse-support interface, which the store does not
-  connect automatically yet: run `sudo snap connect orbit:fuse-support` once.
+  connect automatically yet: run `sudo snap connect orbit-rclone:fuse-support` once.
 license: Apache-2.0
 grade: stable
 confinement: strict
@@ -37,10 +37,12 @@ slots:
     name: com.orbit.rclone.SingleInstance
 
 apps:
-  orbit:
+  # Named like the snap, so the command is plain `orbit-rclone` (/snap/bin/orbit-rclone).
+  orbit-rclone:
     command: usr/bin/orbit
-    desktop: usr/share/applications/orbit.desktop
-    # The start-at-sign-in setting writes this file into the snap's own autostart folder.
+    desktop: usr/share/applications/orbit-rclone.desktop
+    # The start-at-sign-in setting writes a file of this name into the snap's own autostart
+    # folder (the entry is named after the app, not the snap).
     autostart: orbit.desktop
     extensions: [gnome]
     slots: [single-instance]
@@ -66,7 +68,7 @@ parts:
   orbit:
     plugin: dump
     # The .deb from `npm run bundle:linux` (or the orbit-linux-x86_64 CI artifact).
-    source: dist/orbit_1.0.0_amd64.deb
+    source: dist/orbit_1.0.1_amd64.deb
     source-type: deb
     stage-packages:
       - fuse3
@@ -78,9 +80,9 @@ parts:
       # fixed name, and the Exec line must call the snap's command.
       apps="$CRAFT_PART_INSTALL/usr/share/applications"
       if [ -f "$apps/Orbit for rclone.desktop" ]; then
-        mv "$apps/Orbit for rclone.desktop" "$apps/orbit.desktop"
+        mv "$apps/Orbit for rclone.desktop" "$apps/orbit-rclone.desktop"
       fi
-      sed -i 's|^Exec=.*|Exec=orbit %U|; s|^Icon=.*|Icon=${SNAP}/usr/share/icons/hicolor/128x128/apps/orbit.png|' "$apps/orbit.desktop"
+      sed -i 's|^Exec=.*|Exec=orbit-rclone %U|; s|^Icon=.*|Icon=${SNAP}/usr/share/icons/hicolor/128x128/apps/orbit.png|' "$apps/orbit-rclone.desktop"
     prime:
       - -usr/share/doc
       - -usr/share/man

@@ -337,12 +337,13 @@ Each milestone is committed to local git with a message describing it. Nothing i
   `rclone-<target-triple>` (`.exe` on Windows).
 - Linux: `tauri build --bundles appimage,deb`, then `snapcraft` for the snap (CI does both).
 - Windows: `tauri build --bundles msi`.
-- Version: Orbit 1.0.0. App identifier `com.orbit.rclone`.
+- Version: Orbit 1.0.1. App identifier `com.orbit.rclone`.
 - Licence: Apache-2.0 (LICENSE, NOTICE). rclone is MIT and bundled unmodified as a sidecar.
-- Snap: `snap/snapcraft.yaml`, base core24, strict confinement, built from the `.deb` with the
+- Snap: `snap/snapcraft.yaml`, store name `orbit-rclone` (command `orbit-rclone`; the display name
+  stays "Orbit for rclone"), base core24, strict confinement, built from the `.deb` with the
   gnome extension. Interfaces: network, network-bind, home, removable-media, fuse-support (drives),
   desktop, desktop-legacy, wayland, x11, unity7 (tray), gsettings, opengl. Until the store grants
-  auto-connection, drives need `sudo snap connect orbit:fuse-support`. The start-at-sign-in entry
+  auto-connection, drives need `sudo snap connect orbit-rclone:fuse-support`. The start-at-sign-in entry
   is the snap's own autostart desktop file.
 - File names: the display name stays "Orbit for rclone" (window titles, Start menu, .desktop entry,
   installer), but bundle files are named `orbit_<version>_<arch>.AppImage`, `orbit_<version>_<arch>.deb`
